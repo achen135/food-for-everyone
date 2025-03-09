@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #FBFBF8;
+      color: #1A2B22;
+      font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.55;
+    }
+    h1, h2, h3 {
+      font-family: "Newsreader", Georgia, "Times New Roman", serif;
+      font-weight: 500;
+      letter-spacing: -0.012em;
+      margin: 0;
+      line-height: 1.12;
+    }
+    p { margin: 0; }
+    a { color: #1F6E43; text-decoration: none; }
+    a:hover { color: #17512F; }
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: #3F7A57;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #1F6E43;
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 22px;
+      border-radius: 10px;
+      border: none;
+    }
+    .btn-primary:hover { background: #17512F; }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E4E7E2;
+      border-radius: 14px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .icon-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; border-radius: 12px;
+      background: rgba(31,110,67,0.10); color: #1F6E43;
+    }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #FBFBF8;">
+
+  <!-- Nav -->
+  <header style="display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E4E7E2;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg width="24" height="24" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <path d="M14 1.5c-4.7 0-8.5 3.8-8.5 8.5 0 6 7.4 14.7 8 15.4a.7.7 0 0 0 1 0c.6-.7 8-9.4 8-15.4 0-4.7-3.8-8.5-8.5-8.5Z" fill="#1F6E43"/>
+        <path d="M14 6.6c-.2 2 .5 3.4 1.6 4.3 1.2 1 1.7 2.3 1.6 3.8-1.8.2-3.2-.4-4-1.5-.9-1.2-1-3.2.8-6.6Zm-.9 4.9c.5.9.6 1.9.4 3-1.2 0-2.1-.4-2.6-1.2-.5-.8-.6-2 .1-3.6.4 1.2 1.1 1.4 2.1 1.8Z" fill="#FBFBF8"/>
+      </svg>
+      <span style="font-family: 'Newsreader', Georgia, serif; font-size: 17px; font-weight: 600;">Food For Everyone</span>
+    </div>
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1A2B22" stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+  </header>
+
+  <!-- Hero -->
+  <section style="padding: 36px 20px 32px; display: flex; flex-direction: column; gap: 18px;">
+    <span class="eyebrow">Local food rescue, mapped</span>
+    <h1 style="font-size: 34px;">Good food finds a home when everyone&rsquo;s on the same map.</h1>
+    <p style="font-size: 16px; color: #4B5A52;">
+      Food For Everyone connects restaurants, grocers and farms with the food banks and
+      shelters around them. Register, drop a pin, and coordinate donations directly.
+    </p>
+    <a href="#" class="btn-primary" style="width: 100%;">Register your organization</a>
+    <a href="#" style="font-weight: 600; font-size: 15px; text-align: center;">See how it works &rarr;</a>
+
+    <div style="border: 1px solid #E4E7E2; border-radius: 14px; overflow: hidden; background: #EFF4EC; margin-top: 8px;">
+      <svg width="100%" viewBox="0 0 350 260" fill="none" role="img" aria-label="Map with donor and recipient pins">
+        <rect width="350" height="260" fill="#EFF4EC"/>
+        <path d="M-10 80 H360" stroke="#DCE6D6" stroke-width="10" stroke-linecap="round"/>
+        <path d="M-10 180 H360" stroke="#DCE6D6" stroke-width="14" stroke-linecap="round"/>
+        <path d="M90 -10 V270" stroke="#DCE6D6" stroke-width="10" stroke-linecap="round"/>
+        <path d="M250 -10 V270" stroke="#DCE6D6" stroke-width="12" stroke-linecap="round"/>
+        <path d="M260 180 C290 180 315 205 330 240 C334 248 338 262 338 270 L260 270 Z" fill="#DBEBCF"/>
+        <path d="M20 200 q40 -26 84 -12 q26 26 -6 58 q-58 12 -78 -46Z" fill="#D6E7EC"/>
+        <path d="M120 118 C 150 140, 185 140, 210 172" stroke="#93A29A" stroke-width="2" stroke-dasharray="1 7" stroke-linecap="round"/>
+        <g transform="translate(106,88)">
+          <ellipse cx="12" cy="34" rx="8" ry="3" fill="#1A2B22" opacity="0.14"/>
+          <path d="M12 1.5c-5.8 0-10.5 4.7-10.5 10.5 0 7.4 9 18.1 9.8 19a.8.8 0 0 0 1.2 0c.8-.9 9.8-11.6 9.8-19C22.5 6.2 17.8 1.5 12 1.5Z" fill="#E8A33D"/>
+          <circle cx="12" cy="12" r="4.4" fill="#FFFFFF"/>
+        </g>
+        <g transform="translate(196,150)">
+          <ellipse cx="12" cy="34" rx="8" ry="3" fill="#1A2B22" opacity="0.14"/>
+          <circle cx="12" cy="12" r="22" fill="#1F6E43" opacity="0.12"/>
+          <path d="M12 1.5c-5.8 0-10.5 4.7-10.5 10.5 0 7.4 9 18.1 9.8 19a.8.8 0 0 0 1.2 0c.8-.9 9.8-11.6 9.8-19C22.5 6.2 17.8 1.5 12 1.5Z" fill="#1F6E43"/>
+          <circle cx="12" cy="12" r="4.4" fill="#FFFFFF"/>
+        </g>
+        <g transform="translate(270,70)">
+          <ellipse cx="10" cy="30" rx="7" ry="2.6" fill="#1A2B22" opacity="0.12"/>
+          <path d="M10 1.5c-5 0-9 4-9 9 0 6.3 7.7 15.5 8.4 16.3a.7.7 0 0 0 1.1 0C11.3 26 19 16.8 19 10.5c0-5-4-9-9-9Z" fill="#E8A33D"/>
+          <circle cx="10" cy="10.5" r="3.7" fill="#FFFFFF"/>
+        </g>
+        <g transform="translate(52,150)">
+          <ellipse cx="10" cy="30" rx="7" ry="2.6" fill="#1A2B22" opacity="0.12"/>
+          <path d="M10 1.5c-5 0-9 4-9 9 0 6.3 7.7 15.5 8.4 16.3a.7.7 0 0 0 1.1 0C11.3 26 19 16.8 19 10.5c0-5-4-9-9-9Z" fill="#1F6E43"/>
+          <circle cx="10" cy="10.5" r="3.7" fill="#FFFFFF"/>
+        </g>
+        <g transform="translate(28,20)">
+          <rect width="150" height="54" rx="11" fill="#FFFFFF"/>
+          <rect x="0.5" y="0.5" width="149" height="53" rx="10.5" stroke="#E4E7E2"/>
+          <circle cx="20" cy="19" r="5.5" fill="#E8A33D"/>
+          <text x="34" y="24" font-family="Public Sans, sans-serif" font-size="12" font-weight="600" fill="#1A2B22">Food donors</text>
+          <circle cx="20" cy="37" r="5.5" fill="#1F6E43"/>
+          <text x="34" y="42" font-family="Public Sans, sans-serif" font-size="12" font-weight="600" fill="#1A2B22">Recipients</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section style="background: #F1F5EE; padding: 40px 20px; display: flex; flex-direction: column; gap: 22px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span class="eyebrow">How it works</span>
+      <h2 style="font-size: 26px;">From surplus to served, in three steps</h2>
+    </div>
+    <div class="card">
+      <span class="icon-badge">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+      </span>
+      <h3 style="font-size: 19px; font-weight: 600;">Register and choose your role</h3>
+      <p style="font-size: 14.5px; color: #4B5A52;">Sign up as a food donor or a recipient organization. It takes a minute and costs nothing.</p>
+    </div>
+    <div class="card">
+      <span class="icon-badge">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+      </span>
+      <h3 style="font-size: 19px; font-weight: 600;">Set your location</h3>
+      <p style="font-size: 14.5px; color: #4B5A52;">Search your address and confirm the pin. Your organization appears on the shared map right away.</p>
+    </div>
+    <div class="card">
+      <span class="icon-badge">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="m9 15 6-6"/><path d="M15 9v6"/><path d="M9 9h6"/></svg>
+      </span>
+      <h3 style="font-size: 19px; font-weight: 600;">Connect with neighbors</h3>
+      <p style="font-size: 14.5px; color: #4B5A52;">Donors see nearby recipients; recipients see nearby donors. Reach out with the contact details on each listing.</p>
+    </div>
+  </section>
+
+  <!-- Two-sided -->
+  <section style="padding: 40px 20px; display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span class="eyebrow">Two sides, one handoff</span>
+      <h2 style="font-size: 26px;">Built for both ends of the donation</h2>
+    </div>
+    <div style="border: 1px solid #E4E7E2; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+      <span class="eyebrow" style="color: #B4791F;">For food donors</span>
+      <h3 style="font-size: 21px; font-weight: 600;">Move surplus before it spoils</h3>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">Find recipients within a few miles, not a few counties.</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">See who&rsquo;s active and what they accept &mdash; skip the phone tree.</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">Keep edible food out of the dumpster and the landfill.</p>
+      </div>
+    </div>
+    <div style="border: 1px solid #E4E7E2; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 14px; background: #F1F5EE;">
+      <span class="eyebrow">For food banks &amp; shelters</span>
+      <h3 style="font-size: 21px; font-weight: 600;">See what&rsquo;s available nearby</h3>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">Discover local donors you didn&rsquo;t know were there.</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">Plan pickups around your capacity and your hours.</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6E43" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 3px; flex-shrink: 0;"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <p style="font-size: 14.5px; color: #4B5A52;">Build direct relationships with the businesses around you.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing CTA -->
+  <section style="padding: 44px 20px; text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center;">
+    <h2 style="font-size: 27px;">Ready to put your organization on the map?</h2>
+    <p style="font-size: 15px; color: #4B5A52;">Registration is free for donors and recipients alike.</p>
+    <a href="#" class="btn-primary" style="width: 100%;">Register your organization</a>
+    <a href="#" style="font-weight: 600; font-size: 14px;">Have questions? Email the team</a>
+  </section>
+
+  <!-- Footer -->
+  <footer style="background: #1A2B22; color: #D7E0D9; padding: 32px 20px; display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <svg width="22" height="22" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <path d="M14 1.5c-4.7 0-8.5 3.8-8.5 8.5 0 6 7.4 14.7 8 15.4a.7.7 0 0 0 1 0c.6-.7 8-9.4 8-15.4 0-4.7-3.8-8.5-8.5-8.5Z" fill="#8DB580"/>
+      </svg>
+      <span style="font-family: 'Newsreader', Georgia, serif; font-size: 16px; font-weight: 600; color: #FFFFFF;">Food For Everyone</span>
+    </div>
+    <div style="display: flex; gap: 48px; flex-wrap: wrap;">
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7E9387;">Product</span>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">How it works</a>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">For donors</a>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">For food banks</a>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7E9387;">Project</span>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">About</a>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">GitHub</a>
+        <a href="#" style="color: #D7E0D9; font-size: 13.5px;">Contact</a>
+      </div>
+    </div>
+    <div style="border-top: 1px solid #2E3F35; padding-top: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #83978B;">
+      <span>&copy; 2026 Food For Everyone &middot; A portfolio project by [Alex Chen]</span>
+      <span>Map data &copy; OpenStreetMap contributors</span>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+</body>
+</html>
