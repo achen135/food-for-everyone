@@ -1,0 +1,13 @@
+# build output
+.next/
+out/
+coverage/
+node_modules/
+
+# generated
+next-env.d.ts
+package-lock.json
+
+# vault-authored master copies (edited in Obsidian, not here)
+CLAUDE.md
+docs/
