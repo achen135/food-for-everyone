@@ -260,3 +260,31 @@
   had passing tests — `//evil.com` was covered. What it missed was that URL parsing is a state
   machine, not string prefixes, and `\` and `/` are interchangeable in it for special schemes.
   Worth being able to sketch why `/\evil.com` and `//evil.com` resolve identically.
+
+### Drop `profiles.organization_id`; ownership lives only on `organizations.owner_id`
+- **Date:** 2026-08-29
+- **Context:** M1 shipped `profiles` with a nullable `organization_id` alongside
+  `organizations.owner_id`, so the same relationship was recorded twice, in both directions.
+  The M1 review found that RLS `profiles_update_own` only checks `auth.uid() = id` — it says
+  nothing about the *value* of `organization_id`. A signed-in user can therefore point their
+  own profile row at any organization's UUID. Not exploitable in M1 (organizations SELECT is
+  owner-only), but M3 widens that SELECT for the map.
+- **Options considered:** (a) drop the column, keep `organizations.owner_id` as the single
+  source of truth; (b) keep it and add a `with check` that the referenced org is owned by the
+  caller; (c) keep it as-is and rely on application code never trusting it.
+- **Decision:** (a) — drop it in M2's migration.
+- **Why:** v1 is explicitly one organization per account, already enforced by a unique index on
+  `organizations.owner_id`. With that constraint, `profiles.organization_id` carries no
+  information the other column doesn't — it can only ever agree or be wrong. Removing it
+  deletes the invariant instead of defending it: there is no policy to get right, nothing to
+  drift, and no chance a future query joins through the attacker-controlled side.
+  Option (b) works but keeps two things that must stay in sync forever, and buys nothing until
+  multi-org membership exists. Option (c) is how this class of bug ships — "no code reads it
+  today" is not a property you can enforce in review.
+- **Revisit if:** we add multi-org membership (one person administering several organizations).
+  That needs a proper join table (`memberships`: user, org, role) — not a nullable column on
+  `profiles`. Reintroducing this column would be the wrong shape for that anyway.
+- **Interview note:** the useful framing is *make illegal states unrepresentable*. The
+  vulnerability wasn't a missing check; it was a schema that could express "my profile belongs
+  to your organization" at all. The strongest fix for a data-integrity bug is often deleting
+  the column that allows the bad state, not adding a guard that forbids it.

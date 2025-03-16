@@ -101,8 +101,12 @@ presentation. Nothing is carried over but the concept.
 |---|---|---|
 | `id` | uuid pk → `auth.users` | |
 | `full_name` | text | |
-| `organization_id` | uuid → `organizations` null | |
 | `created_at` | timestamptz | |
+
+A profile has **no** `organization_id`. The link is one-directional —
+`organizations.owner_id` → `auth.users`, with a unique index enforcing one org per account.
+A second pointer on `profiles` would be redundant and, worse, writable by the user under
+`profiles_update_own` (see Design Decisions, 2026-08-29). Dropped in M2's migration.
 
 Renames from the old model: `businesses` → `organizations`; `donator` / `receiver` →
 `donor` / `recipient`; hand-typed GeoPoint → geocoded `location` + `address`.
@@ -272,6 +276,10 @@ Keep this current between planning sessions. Settled question → move reasoning
 - [ ] M7: verify Upstash free tier needs no card at signup (fallback: in-process limiter only).
 
 ### Resolved
+- `profiles.organization_id` is **dropped** (M2 migration) rather than constrained. v1 is
+  one organization per account, so `organizations.owner_id` + its unique index already express
+  the relationship; a second, user-writable pointer could only ever disagree with it.
+  → [[Design Decisions]]
 - Geocoder is search-triggered, not keystroke autocomplete — Nominatim's usage policy forbids
   per-keystroke geocoding. Debounced "search address" action + cached results; Photon or
   self-hosted Nominatim as the fallback. → [[Design Decisions]]
@@ -289,12 +297,6 @@ Keep this current between planning sessions. Settled question → move reasoning
   per milestone, opens a PR, squash-merges, tags `v0.x-mN`.
 - [ ] Add Lighthouse CI or `axe-core` to the CI workflow at M4 — commits the a11y evidence the
   same way M7 commits the k6 report.
-- [ ] **M2 — drop `profiles.organization_id`.** RLS `profiles_update_own` only checks
-  `auth.uid() = id`, so a user can point their own profile row at *any* organization's UUID.
-  Harmless in M1 (org SELECT is owner-only), but M3 widens that SELECT, and anything that later
-  derives access from this column becomes privilege escalation. The column is already redundant
-  with `organizations.owner_id` + its unique index. Prefer deleting it; otherwise add a
-  `with check` that the referenced org is owned by the caller.
 - [ ] **M2 — `signUp` leaks raw Supabase error text.** `signIn` deliberately genericises to
   "Incorrect email or password"; `signUp` returns `error.message` straight through, which can
   surface "User already registered" → account enumeration. Match signIn's treatment.
