@@ -4,8 +4,9 @@ Connects food donors (restaurants, grocers, farms) with food recipients (food ba
 shelters, community fridges) through a shared map. Ground-up rebuild of an earlier
 hackathon project.
 
-**Status:** M0 scaffold complete. Auth (M1), organization profiles (M2), and the map (M3)
-are next; the landing page is redesigned in M4.
+**Status:** M1 in progress on branch `m1/auth-and-profile` — email/password + Google auth,
+`profiles` + `organizations` schema with RLS, protected `/app`. Organization profiles (M2)
+and the map (M3) are next; the landing page is redesigned in M4.
 
 ## Docs
 
@@ -25,9 +26,28 @@ Everything on free, no-card tiers.
 ```bash
 nvm use            # Node 22 (see .nvmrc)
 npm install
-cp .env.example .env.local   # not needed until M1
+cp .env.example .env.local   # then fill in the Supabase values
 npm run dev        # http://localhost:3000
 ```
+
+The static landing page runs without any env. The auth pages and `/app` need
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Supabase →
+Project Settings → API).
+
+### Database
+
+Apply the schema + RLS to your Supabase project:
+
+```bash
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+```
+
+(or paste `supabase/migrations/*.sql` into the Supabase SQL editor).
+
+For Google sign-in, configure the Google provider in Supabase → Authentication →
+Providers, and add `http://localhost:3000/**` plus your production URL to the
+allowed Redirect URLs.
 
 ## Scripts
 

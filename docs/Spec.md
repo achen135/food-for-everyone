@@ -24,7 +24,9 @@ presentation. Nothing is carried over but the concept.
 **Goals (v1)**
 - Organizations can register, verify their email, and sign in.
 - An organization has a profile: name, type (donor / recipient), description, contact info, address.
-- Address entry is autocomplete-backed; coordinates are derived by geocoding, never hand-typed.
+- Address entry is search-assisted (a debounced "search this address" action, not a request
+  per keystroke — Nominatim's usage policy forbids that); coordinates are derived by
+  geocoding, never hand-typed.
 - A map shows relevant counterparties (donors see recipients, recipients see donors), with
   marker clustering and detail popups.
 - Filter/search the map by distance, name, and type.
@@ -53,9 +55,9 @@ presentation. Nothing is carried over but the concept.
 | Framework | Next.js (App Router), React, **TypeScript** | Vercel hosting; RSC + Route Handlers / Server Actions |
 | Styling | Tailwind CSS + shadcn/ui (Radix primitives) | We own the component code; accessible by default |
 | Maps | **MapLibre GL** via `react-map-gl/maplibre` + OpenFreeMap tiles | Open-source, vector, clustering; no account, no key, no card |
-| Geocoding | **Nominatim** (OpenStreetMap) | Address autocomplete; attribution + fair-use policy, self-host later if needed |
+| Geocoding | **Nominatim** (OpenStreetMap) — **search-triggered, not keystroke autocomplete** | Nominatim policy forbids per-keystroke geocoding; use a debounced "search address" action + cache every result + a real `User-Agent`. Fallback: Photon (self-hostable) or self-hosted Nominatim. See Design Decisions. |
 | Database | Postgres via **Supabase** + PostGIS | Auth + Row Level Security included; free tier, no card |
-| Auth | Supabase Auth (email/password; Google OAuth TBD) | Cookie session via `@supabase/ssr` |
+| Auth | Supabase Auth — **email/password + Google OAuth, both from v1** | Cookie session via `@supabase/ssr`. See Design Decisions. |
 | Forms | react-hook-form + zod | zod schemas shared client + server |
 | Notifications | sonner toasts | replaces every `alert()` |
 | Testing | Vitest + React Testing Library; Playwright for E2E happy paths | |
@@ -126,6 +128,43 @@ a11y pass, dark mode, skeletons, SEO metadata, README with screenshots.
 **M5 — Tests + hardening.** Vitest on schemas/utils, RTL on key components, Playwright happy
 path (sign up → create org → see map). Rate-limit write endpoints. Final RLS review.
 
+### 7.1 Build order (sprint) — added 2026-08-28
+
+The project is being built in a short push over a few weeks, shipping in small renditions,
+then frozen for interview practice as applications go out. All of M0–M8 probably won't land in
+that window, and the résumé's quantified bullets describe M6–M8 — so the sequence is ordered
+to leave the **highest résumé + demo value finished first** if time runs short:
+
+1. **M1** — auth + profile.
+2. **M2** — organization profile + geocoding (search-triggered, per §4).
+3. **M3** — map, **plus a seed script**: ~25–30 donor/recipient orgs across one real metro,
+   real addresses so PostGIS radius queries return interesting results. One seed system,
+   reused by M8.
+4. **Deploy checkpoint.** Green `main` deployed to Vercel; add the Supabase keep-alive cron
+   (below). This is a shippable v1 — do a résumé-wording pass now (§9) so the CV matches
+   what actually exists.
+5. **M6** — real-time donation requests, scoped tight (`listings` + `claims`, a post form, a
+   browse list, a claim button, one Realtime subscription + toast). Makes the strongest
+   résumé bullet real and honest.
+6. **M4** — landing, time-boxed to 1–2 days (the mockup already exists). Ship the README with
+   a short screen-recording/GIF walkthrough and a **read-only demo login** (seeded,
+   credentials in the README) so an auth-gated map is still viewable in 90 seconds.
+7. **M7** — performance layer. Only with runway left, and only after the measurement protocol
+   in §9 is written down first. A rushed load-test number is worse than no bullet.
+8. **M8** — analytics dashboard. Last, and first to cut — "dashboard over seeded data" is the
+   hardest bullet to defend in an interview.
+
+**M5 is folded in, not saved for last:** every milestone lands with its own zod/RTL tests, a
+Playwright happy-path check, and an RLS review of any policy it adds.
+
+**Rendition discipline:** each rendition keeps `main` green and deployed; one PR + one tag
+(`v0.x-mN`) per milestone; `docs/Sessions.md`, `docs/Architecture.md`, and `docs/Concepts.md`
+are updated as part of the milestone, not after it.
+
+**Supabase keep-alive:** free projects pause after ~7 days idle. A GitHub Actions cron (every
+~5 days) hitting a lightweight `/api/health` endpoint keeps the demo link live through the
+application window — and reads as "automated around a platform constraint" in an interview.
+
 ## 8. Visual Direction
 
 A starting point, expected to evolve during M4. Keep the green — the old look failed on
@@ -190,6 +229,16 @@ counts into `docs/Sessions.md` and `docs/benchmarks/`.
 → backs *"caching layer + token-bucket rate limiter — X% fewer DB reads, p50 A ms → B ms under
 load."* Numbers come from the recorded k6 run, not estimates.
 
+*Measurement protocol (a number goes in the résumé only if it comes out of this):*
+- Run the app locally (`next build && next start`) against a **local Postgres**. Never load
+  test the Vercel deployment — their fair-use policy forbids it and Hobby has no SLA.
+- One fixed k6 script (same VUs, duration, endpoint mix), run twice: **cache disabled** then
+  **cache enabled**. Rate limiter off during the read-count comparison so it doesn't mask reads.
+- Count DB reads through a single instrumented data-layer function that every query passes
+  through; cross-check against `pg_stat_statements`. "% fewer reads" = (before − after) / before.
+- Commit the k6 script, both JSON summaries, and a short `docs/benchmarks/README.md` describing
+  the setup. Every résumé figure must be re-derivable from those files.
+
 **M8 — Analytics dashboard (real-time).**
 Authenticated dashboard: completed donations over time, active listings, orgs by type,
 fulfilment rate, geographic spread. Recharts (shadcn chart components), live-updating via the
@@ -198,11 +247,19 @@ demo; dashboard counts reflect that seeded data — describe it as seeded/simula
 interviews, not organic production traffic.
 → backs *"real-time analytics dashboard tracking 200+ donations."*
 
-**Résumé alignment (later pass, non-blocking):** tech line "React, Firebase" →
-"Next.js, TypeScript, PostgreSQL/PostGIS, Supabase"; "multithreaded caching layer" doesn't fit
-a Node/serverless runtime — reword to "in-memory read-through cache with TTL"; dates and the
-"15+ restaurants / 3 food banks / 200+ transactions" figures should match whatever the
-seeded/real data actually shows once M6–M8 land.
+**Résumé alignment (do a pass at the §7.1 deploy checkpoint, not only at the end):**
+- Tech line "React, Firebase" → "Next.js, TypeScript, PostgreSQL/PostGIS, Supabase".
+- "multithreaded caching layer" doesn't fit a Node/serverless runtime → "in-memory
+  read-through cache with TTL".
+- Dates: make the 2026 ground-up rebuild visible — don't leave it buried inside the original
+  "Mar–Sep 2025" hackathon range. A split entry, or "2025 hackathon; 2026 rebuild" phrasing,
+  turns the self-critique into an asset.
+- Every quantified figure ("15+ / 3 / 200+", "40% fewer reads", "100 ms → 40 ms") stays off
+  the résumé until the seed data or the k6 run in the repo actually produces it. If M7/M8
+  don't land in the sprint, those bullets change or come out.
+- Whatever ships, the auth-gated-map reasoning (shelter safety — see Design Decisions) and the
+  "rebuilt my own hackathon project from scratch" narrative are the strongest interview
+  material, stronger than any latency number. Keep them ready.
 
 ## 10. Open Questions / TODO
 
@@ -210,19 +267,43 @@ Keep this current between planning sessions. Settled question → move reasoning
 [[Design Decisions]] and delete here. Task started → track in [[Sessions]] and delete here.
 
 ### Open Questions
-- [ ] Confirm OpenFreeMap + Nominatim fair-use limits are fine for demo traffic; if not,
-  self-host Protomaps PMTiles (zero cost, stronger interview story).
+- [ ] Confirm OpenFreeMap tile fair-use is fine for demo traffic; if not, self-host Protomaps
+  PMTiles (zero cost, stronger interview story).
 - [ ] M7: verify Upstash free tier needs no card at signup (fallback: in-process limiter only).
 
 ### Resolved
-- Auth-gated map for v1 (sensitive shelter addresses + scraping). Public-with-privacy-controls
-  is a post-v1 option. → [[Design Decisions]]
-- Name confirmed "Food For Everyone"; repo slug `food-for-everyone` (`achen135/food-for-everyone`
-  is free as of 2026-08-27).
+- Geocoder is search-triggered, not keystroke autocomplete — Nominatim's usage policy forbids
+  per-keystroke geocoding. Debounced "search address" action + cached results; Photon or
+  self-hosted Nominatim as the fallback. → [[Design Decisions]]
 
 ### TODO
 - [ ] Rotate the exposed Google Maps API key in the old project; restrict or delete it.
-- [ ] Create the new GitHub repo (`food-for-everyone`) and Vercel project.
-- [ ] Create the Supabase project (free tier). Note: free projects pause after ~7 days idle —
-  un-pause before sharing the link, or add a lightweight keep-alive ping.
-- [ ] Résumé consistency pass once M6–M8 land (see §9).
+- [x] Create the new GitHub repo (`food-for-everyone`) and Vercel project. *(done 2026-08-28)*
+- [x] Create the Supabase project (free tier). *(done 2026-08-28)* Free projects pause after
+  ~7 days idle — keep-alive cron is a deploy-checkpoint task (§7.1).
+- [x] M1: the CI `build` step will fail once a Supabase client initialises at module load —
+  give the CI job placeholder `NEXT_PUBLIC_SUPABASE_*` env, or guard client creation so
+  `build` doesn't need it. *(done 2026-08-28 — both: `lib/env.ts` reads `process.env` lazily
+  inside functions, and CI's build step sets placeholder values.)*
+- [ ] Turn on branch protection for `main` (require CI green). Coding agent works on a branch
+  per milestone, opens a PR, squash-merges, tags `v0.x-mN`.
+- [ ] Add Lighthouse CI or `axe-core` to the CI workflow at M4 — commits the a11y evidence the
+  same way M7 commits the k6 report.
+- [ ] **M2 — drop `profiles.organization_id`.** RLS `profiles_update_own` only checks
+  `auth.uid() = id`, so a user can point their own profile row at *any* organization's UUID.
+  Harmless in M1 (org SELECT is owner-only), but M3 widens that SELECT, and anything that later
+  derives access from this column becomes privilege escalation. The column is already redundant
+  with `organizations.owner_id` + its unique index. Prefer deleting it; otherwise add a
+  `with check` that the referenced org is owned by the caller.
+- [ ] **M2 — `signUp` leaks raw Supabase error text.** `signIn` deliberately genericises to
+  "Incorrect email or password"; `signUp` returns `error.message` straight through, which can
+  surface "User already registered" → account enumeration. Match signIn's treatment.
+- [ ] **`lib/supabase/middleware.ts` fails open.** If `NEXT_PUBLIC_SUPABASE_*` is missing the
+  proxy no-ops and stops gating `/app/*`; the warning is suppressed in production. Mitigated
+  today (`lib/env.ts` throws during render, so it 500s rather than leaking), but the production
+  branch should fail loudly instead of passing quietly.
+- [ ] **Link the Supabase CLI before M2 schema work.** `_init.sql` was applied by hand, so the
+  local migration file and the live DB can drift silently. `supabase link --project-ref
+  pdgbtkplzfocxyuflpxm`, then `migration repair --status applied 20260828223018` so `db push`
+  owns M2's changes.
+- [ ] Résumé consistency pass at the §7.1 deploy checkpoint, and again if M6–M8 land (§9).

@@ -5,7 +5,7 @@
 
 **Entry format**
 
-### <Decision title>
+### (Put Decision Title)
 - **Date:** YYYY-MM-DD
 - **Context:** what problem forced the choice
 - **Options considered:** A, B, C
@@ -188,3 +188,75 @@
   demo data is described as seeded in interviews, never as organic production traffic.
 - **Revisit if:** an application deadline forces a feature demo before the refactor is done —
   then cherry-pick M8 (most visual) on top of whatever is ready.
+
+### Geocoding is search-triggered, not keystroke autocomplete
+- **Date:** 2026-08-28
+- **Context:** Spec §2/§4 originally called for "autocomplete-backed" address entry via
+  Nominatim. The public OSM Nominatim instance's usage policy explicitly forbids per-keystroke
+  geocoding — one request per character will get the IP blocked.
+- **Options considered:**
+  - Keystroke autocomplete against public Nominatim — violates the policy.
+  - Debounced, search-triggered lookup against Nominatim — a "search this address" button (or
+    a long ~600 ms+ debounce on pause), one valid `User-Agent`, every result cached.
+  - Photon (komoot) — an OSM-based geocoder *built* for autocomplete, more permissive public
+    instance, also self-hostable.
+  - Self-hosted Nominatim — full control, no shared rate limit, but heavy to run.
+- **Decision:** Search-triggered lookup against public Nominatim for v1, results cached.
+  Photon (public, then self-hosted) is the fallback if the UX needs true type-ahead or if
+  Nominatim rate-limits bite.
+- **Why:** Keeps v1 on a zero-cost, no-card, no-account service while staying inside its
+  rules. A debounced "search" step is a small compromise most users won't notice, and caching
+  every geocode is good practice regardless. Self-hosting stays a known upgrade path (and a
+  better interview story) rather than a v1 cost.
+- **Revisit if:** the search UX feels clunky in testing → move to Photon; or demo traffic
+  hits Nominatim's limits → self-host.
+
+### Sprint build order — feature value before polish
+- **Date:** 2026-08-28
+- **Context:** The build is a few-week push, shipped in small renditions, then frozen for
+  interview practice as applications go out. M0–M8 almost certainly won't all land in that
+  window, and the résumé's quantified bullets describe M6–M8 (built last in the original order).
+- **Options considered:** (a) original order M0 → … → M8; (b) reorder so a thin slice reaches
+  M6 early, then polish; (c) leave the order, soften the résumé to track progress.
+- **Decision:** (b) + (c). Order: M1 → M2 → M3 (+ seed script) → deploy checkpoint → M6 → M4
+  → M7 → M8, with M5 folded into every milestone; résumé-wording pass at the deploy
+  checkpoint, not only at the end. Detail in Spec §7.1.
+- **Why:** If time runs out, what's finished should be the working product (M1–M3) plus the
+  strongest, most honest résumé feature (M6, real-time donation requests). M8 — a dashboard
+  over admittedly-seeded data — is the weakest to defend, so it is last and first to cut.
+  This doesn't break "refactor before features": M6 still lands on the refactored code, after
+  M3; it only precedes the landing polish and the perf layer, which the earlier entry's
+  "Revisit if" already anticipated.
+- **Revisit if:** the sprint has more runway than expected → pull M4/M7 forward for a more
+  finished v1 before applications peak.
+
+### Redirect allow-listing rejects backslashes, not just `//`
+- **Date:** 2026-08-28
+- **Context:** Sign-in accepts a `?redirectTo=` parameter so a user bounced off `/app/*` by the
+  proxy lands back where they were headed. Any user-controlled redirect target is an open-redirect
+  risk, so M1 shipped `safeRedirectPath()` — reject anything not starting with `/`, and reject
+  `//` (protocol-relative). Reviewing M1 turned up a bypass in that guard.
+- **Options considered:** (a) keep the string checks and add the missing cases; (b) parse with
+  `new URL(value, base)` and compare `origin`; (c) drop `redirectTo` and always land on `/app`.
+- **Decision:** (a) — reject any value containing a backslash or a control character, on top of
+  the existing checks. Regression tests cover each payload.
+- **Why:** Per the WHATWG URL spec, a leading `/\` puts the parser into *special authority ignore
+  slashes* state, so what follows is read as a **hostname**. `/\evil.com` passed the old guard and
+  a browser resolved it to `https://evil.com/`. It only bites where the redirect is emitted as a
+  *relative* `Location` header — which is exactly what `redirect()` does in the `signIn` Server
+  Action. (The two Route Handlers happened to be safe because they concatenate into an absolute
+  URL first, pinning the host — incidental, not designed.) The impact is the bad one: the victim
+  types **real credentials** into our real sign-in page, then gets forwarded to an attacker's site
+  — textbook credential phishing. Control characters are rejected too, because browsers strip them
+  before parsing and that can reconstitute `//`.
+  Option (b) is the more principled fix and worth moving to if this grows more callers, but it
+  needs a trustworthy base URL — behind Vercel's proxy that means reasoning about
+  `x-forwarded-host`, which is itself attacker-influenced. Three string checks with tests are
+  easier to verify than a URL-parse that depends on getting the base right.
+  Option (c) loses real UX for a solvable problem.
+- **Revisit if:** more call sites need redirect validation, or we start accepting absolute URLs
+  (e.g. cross-subdomain) — then move to origin comparison against an explicit allow-list.
+- **Interview note:** the useful version of this story is that the *first* fix looked complete and
+  had passing tests — `//evil.com` was covered. What it missed was that URL parsing is a state
+  machine, not string prefixes, and `\` and `/` are interchangeable in it for special schemes.
+  Worth being able to sketch why `/\evil.com` and `//evil.com` resolve identically.
