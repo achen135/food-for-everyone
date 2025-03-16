@@ -20,12 +20,15 @@ $$;
 ------------------------------------------------------------------------------
 -- updated_at helper
 ------------------------------------------------------------------------------
+-- empty search_path per Supabase hardening guidance (Postgres always searches
+-- pg_catalog first, but we schema-qualify anyway to be explicit).
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
-  new.updated_at = now();
+  new.updated_at = pg_catalog.now();
   return new;
 end
 $$;
