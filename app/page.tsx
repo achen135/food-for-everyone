@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -15,14 +17,16 @@ export default function Home() {
         the hand-off directly.
       </p>
       <div className="flex flex-wrap gap-3">
-        <Button disabled>Register your organization</Button>
-        <Button variant="outline" disabled>
-          Sign in
+        <Button asChild>
+          <Link href="/sign-up">Register your organization</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/sign-in">Sign in</Link>
         </Button>
       </div>
       <p className="text-muted-foreground text-sm">
-        Scaffold (M0). Auth, organization profiles, and the map arrive in
-        M1&ndash;M3; this page is redesigned in M4.
+        The map is visible to registered organizations only. The full landing
+        page lands in M4.
       </p>
     </main>
   );
