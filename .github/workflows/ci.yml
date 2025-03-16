@@ -39,3 +39,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Placeholder values so a module-load Supabase client can't fail the
+          # build. No network call is made at build time (all auth routes are
+          # dynamic); real values live in Vercel project settings. See Spec §10.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
