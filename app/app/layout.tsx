@@ -25,9 +25,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-full flex-col">
       <header className="border-border border-b">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3">
-          <Link href="/app" className="font-heading text-lg font-medium">
-            Food For Everyone
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link href="/app" className="font-heading text-lg font-medium">
+              Food For Everyone
+            </Link>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/app" className="hover:text-brand">
+                Dashboard
+              </Link>
+              <Link href="/app/organization" className="hover:text-brand">
+                Organization
+              </Link>
+            </nav>
+          </div>
           <div className="text-muted-foreground flex items-center gap-3 text-sm">
             <span className="hidden sm:inline">
               {profile.full_name ?? user.email}

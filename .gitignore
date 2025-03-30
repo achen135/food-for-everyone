@@ -49,6 +49,9 @@ next-env.d.ts
 .idea/
 *.swp
 
+# agent config
+CLAUDE.md
+
 # planning docs — authored in the Obsidian vault (source of truth),
 # deliberately kept out of the public repo
 /docs/
