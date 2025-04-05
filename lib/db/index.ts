@@ -7,8 +7,17 @@
 export { getReadCount, resetReadCount, tracked } from "@/lib/db/instrument";
 export { getMyProfile, getOrCreateProfile } from "@/lib/db/profiles";
 export {
+  findCounterpartiesNear,
   getMyOrganization,
+  getMyOrganizationPoint,
   upsertMyOrganization,
+  type CounterpartySearch,
   type OrganizationWrite,
 } from "@/lib/db/organizations";
-export type { Organization, OrganizationType, Profile } from "@/lib/db/types";
+export type {
+  CounterpartyOrganization,
+  LatLng,
+  Organization,
+  OrganizationType,
+  Profile,
+} from "@/lib/db/types";

@@ -14,3 +14,6 @@ docs/
 
 # supabase CLI local state (gitignored, but present after `supabase link`)
 supabase/.temp/
+
+# generated vendor copy (scripts/copy-maplibre-worker.mjs)
+public/maplibre/

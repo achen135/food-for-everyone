@@ -4,9 +4,10 @@ Connects food donors (restaurants, grocers, farms) with food recipients (food ba
 shelters, community fridges) through a shared map. Ground-up rebuild of an earlier
 hackathon project.
 
-**Status:** M1 in progress on branch `m1/auth-and-profile` — email/password + Google auth,
-`profiles` + `organizations` schema with RLS, protected `/app`. Organization profiles (M2)
-and the map (M3) are next; the landing page is redesigned in M4.
+**Status:** shipped so far — authentication (email/password + Google), organization
+profiles with search-triggered geocoding, and a clustered MapLibre map of nearby
+counterparties backed by a PostGIS radius query, plus a seed script. The landing page
+redesign is next up.
 
 ## Stack
 
@@ -33,14 +34,38 @@ Apply the schema + RLS to your Supabase project:
 
 ```bash
 npx supabase link --project-ref <your-project-ref>
-npx supabase db push
+npm run db:push
 ```
 
 (or paste `supabase/migrations/*.sql` into the Supabase SQL editor).
 
+Check it landed — the version must appear in **both** columns:
+
+```bash
+npx supabase migration list
+```
+
 For Google sign-in, configure the Google provider in Supabase → Authentication →
 Providers, and add `http://localhost:3000/**` plus your production URL to the
 allowed Redirect URLs.
+
+### Demo data
+
+```bash
+npm run db:seed             # add any missing demo organizations
+npm run db:seed -- --reset  # delete the seed accounts first, then recreate
+```
+
+Creates 30 fictional organizations at real Chicago-area addresses so the map and the
+radius query have something to show. Needs `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
+
+Every account it creates has an `@seed.foodforeveryone.invalid` email, and the script
+only ever touches accounts on that domain — it cannot disturb a real one. To browse the
+seeded map, sign in as a normal user and give your own organization a Chicago address;
+donors will see the seeded recipients and vice versa.
+
+**This is seeded demo data.** If it ever backs a figure in a write-up, it gets described
+as seeded — never as real usage.
 
 ## Scripts
 
@@ -55,6 +80,8 @@ allowed Redirect URLs.
 | `npm run test:watch`   | Vitest in watch mode                            |
 | `npm run format`       | Prettier write                                  |
 | `npm run format:check` | Prettier check (used in CI)                     |
+| `npm run db:push`      | Apply pending migrations to the linked project  |
+| `npm run db:seed`      | Create the demo organizations (service role)    |
 
 CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, test, and build on
 every push to `main` and every pull request.

@@ -30,3 +30,29 @@ export interface Organization {
   created_at: string;
   updated_at: string;
 }
+
+export interface LatLng {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * One row from the `organizations_near` RPC — what a counterparty is allowed to
+ * see. Deliberately narrower than `Organization`: no `owner_id`, no timestamps,
+ * and nothing about the person who registered the org (CLAUDE.md architecture
+ * rule). Keep this in step with the function's `returns table (...)`.
+ */
+export interface CounterpartyOrganization {
+  id: string;
+  name: string;
+  type: OrganizationType;
+  description: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  verified: boolean;
+  latitude: number;
+  longitude: number;
+  distance_km: number;
+}

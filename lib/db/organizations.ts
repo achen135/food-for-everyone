@@ -2,7 +2,12 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { tracked } from "@/lib/db/instrument";
-import type { Organization, OrganizationType } from "@/lib/db/types";
+import type {
+  CounterpartyOrganization,
+  LatLng,
+  Organization,
+  OrganizationType,
+} from "@/lib/db/types";
 
 /** Fields the organization form owns. `null` = clear; omit lat/lng to keep the stored point. */
 export interface OrganizationWrite {
@@ -71,6 +76,58 @@ export async function upsertMyOrganization(
   );
   if (error) throw error;
   return data;
+}
+
+/**
+ * The caller's own coordinates, for centring the map. Goes through the
+ * `my_organization_point` RPC because `location` is a geography column —
+ * PostgREST returns hex EWKB for it on a plain select, so lat/lng are extracted
+ * in SQL rather than decoded here.
+ */
+export async function getMyOrganizationPoint(): Promise<LatLng | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await tracked("organizations.myPoint", () =>
+    supabase.rpc("my_organization_point").maybeSingle(),
+  );
+  if (error) throw error;
+  if (!data) return null;
+
+  const point = data as { latitude: number; longitude: number };
+  return { latitude: point.latitude, longitude: point.longitude };
+}
+
+export interface CounterpartySearch {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  /** Optional name filter. */
+  query?: string;
+}
+
+/**
+ * Counterparty organizations within `radiusKm` of a point, nearest first.
+ *
+ * Authorization is NOT expressed here: `organizations_near` is a security
+ * definer function that derives the caller's counterparty type from
+ * `auth.uid()`. Nothing this function passes can widen what comes back — the
+ * arguments only narrow it. A caller with no organization gets an empty list.
+ */
+export async function findCounterpartiesNear(
+  search: CounterpartySearch,
+): Promise<CounterpartyOrganization[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await tracked("organizations.near", () =>
+    supabase.rpc("organizations_near", {
+      center_lat: search.latitude,
+      center_lng: search.longitude,
+      radius_km: search.radiusKm,
+      search: search.query?.trim() || null,
+    }),
+  );
+  if (error) throw error;
+  return (data ?? []) as CounterpartyOrganization[];
 }
 
 export type { OrganizationType };

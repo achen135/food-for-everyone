@@ -13,6 +13,10 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // `supabase/seed/*` runs directly on Node's type stripping, which does not
+    // rewrite import specifiers — so those imports must carry a `.ts`
+    // extension. Type-check-only permission; safe because `noEmit` is on.
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"
