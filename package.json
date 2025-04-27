@@ -19,7 +19,8 @@
     "db:push": "supabase db push",
     "maplibre:worker": "node scripts/copy-maplibre-worker.mjs",
     "predev": "node scripts/copy-maplibre-worker.mjs",
-    "prebuild": "node scripts/copy-maplibre-worker.mjs"
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "check:client-env": "node scripts/check-client-env.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

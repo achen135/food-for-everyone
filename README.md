@@ -5,9 +5,10 @@ shelters, community fridges) through a shared map. Ground-up rebuild of an earli
 hackathon project.
 
 **Status:** shipped so far — authentication (email/password + Google), organization
-profiles with search-triggered geocoding, and a clustered MapLibre map of nearby
-counterparties backed by a PostGIS radius query, plus a seed script. The landing page
-redesign is next up.
+profiles with search-triggered geocoding, a clustered MapLibre map of nearby
+counterparties backed by a PostGIS radius query, and real-time donation listings
+(donors post surplus, recipients claim it, both sides update live). Plus a seed
+script. The landing page redesign is next up.
 
 ## Stack
 

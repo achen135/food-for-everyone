@@ -1,11 +1,23 @@
 /**
- * Environment access. Values are read lazily (inside functions), never at module
- * load, so `next build` / CI don't fail when Supabase env is absent — see
- * Spec §10. A missing value throws only when something actually needs it.
+ * Environment access.
+ *
+ * Two rules here, both load-bearing:
+ *
+ * 1. **Read inside functions, never at module load**, so `next build` and CI
+ *    don't fail when Supabase env is absent (Spec §10). A missing value throws
+ *    only when something actually needs it.
+ *
+ * 2. **Reference `process.env.NEXT_PUBLIC_*` statically.** Next replaces those
+ *    expressions with literals when it builds the client bundle — it is text
+ *    substitution, not a runtime lookup, because a browser has no `process`.
+ *    A computed access like `process.env[name]` cannot be substituted, so it
+ *    silently becomes `undefined` in the browser while continuing to work on
+ *    the server. That was a real bug here (see Sessions, 2026-08-31): it hid
+ *    until the first Client Component built a Supabase client during render.
+ *    `scripts/check-client-env.mjs` guards against it coming back.
  */
 
-function required(name: string): string {
-  const value = process.env[name];
+function required(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
       `Missing environment variable ${name}. Copy .env.example to .env.local and fill it in.`,
@@ -16,12 +28,18 @@ function required(name: string): string {
 
 /** Supabase project URL. Safe to expose to the browser. */
 export function supabaseUrl(): string {
-  return required("NEXT_PUBLIC_SUPABASE_URL");
+  return required(
+    "NEXT_PUBLIC_SUPABASE_URL",
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+  );
 }
 
 /** Supabase anon (publishable) key. Safe to expose to the browser; RLS still applies. */
 export function supabaseAnonKey(): string {
-  return required("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  return required(
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  );
 }
 
 /**

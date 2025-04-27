@@ -109,3 +109,74 @@ describe("OrganizationForm", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+describe("OrganizationForm — changing the address", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  async function pickChicago(user: ReturnType<typeof userEvent.setup>) {
+    searchAddressAction.mockResolvedValue({
+      ok: true,
+      results: [
+        {
+          label: "233 S Wacker Dr, Chicago",
+          latitude: 41.878738,
+          longitude: -87.6359612,
+        },
+      ],
+    });
+    await user.click(screen.getByRole("button", { name: "Change address" }));
+    await user.type(
+      await screen.findByLabelText("Address to search"),
+      "233 S Wacker",
+    );
+    await user.click(screen.getByRole("button", { name: "Search" }));
+  }
+
+  it("does not submit the organization form when searching", async () => {
+    // Regression: Radix portals the dialog out of the DOM, but React events
+    // bubble through the React tree, where the dialog is still inside the
+    // organization <form>. Pressing Search therefore submitted that form with
+    // unchanged values — "Organization updated", then a redirect away from the
+    // page, before the user had picked anything.
+    saveOrganizationAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<OrganizationForm initial={existing} />);
+
+    await pickChicago(user);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "233 S Wacker Dr, Chicago" }),
+      ).toBeInTheDocument(),
+    );
+    expect(saveOrganizationAction).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("sends the newly picked address AND its coordinates", async () => {
+    saveOrganizationAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<OrganizationForm initial={existing} />);
+
+    await pickChicago(user);
+    await user.click(
+      await screen.findByRole("button", { name: "233 S Wacker Dr, Chicago" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("Address to search"),
+      ).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(saveOrganizationAction).toHaveBeenCalledTimes(1),
+    );
+    expect(saveOrganizationAction.mock.calls[0][0]).toMatchObject({
+      address: "233 S Wacker Dr, Chicago",
+      latitude: 41.878738,
+      longitude: -87.6359612,
+    });
+  });
+});

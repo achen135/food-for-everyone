@@ -45,3 +45,12 @@ jobs:
           # dynamic); real values live in Vercel project settings. See Spec §10.
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Public env reached the client bundle
+        # NEXT_PUBLIC_* are inlined by text substitution, so reading them
+        # indirectly leaves them undefined in the browser while everything
+        # server-side keeps working. Nothing else in this pipeline can see that.
+        run: npm run check:client-env
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key

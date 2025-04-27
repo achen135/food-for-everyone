@@ -74,9 +74,21 @@ export function AddressSearchDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/*
+          `stopPropagation` is load-bearing, not defensive.
+
+          Radix portals this dialog to <body>, so in the DOM it is not nested
+          inside the organization form. But React's synthetic events bubble
+          through the *React* tree, where this dialog is still a child of that
+          form — so without this, pressing Search submits the organization form
+          with whatever was in it, which reported "Organization updated" and
+          redirected the user away mid-search. Regression test in
+          organization-form.test.tsx.
+        */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             runSearch();
           }}
           className="flex gap-2"
