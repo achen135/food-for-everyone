@@ -18,13 +18,25 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-export function SignInForm({ redirectTo }: { redirectTo?: string }) {
+export function SignInForm({
+  redirectTo,
+  defaultEmail,
+  defaultPassword,
+}: {
+  redirectTo?: string;
+  /** Pre-fills the form — used by /sign-in?demo=1. Never submits on its own. */
+  defaultEmail?: string;
+  defaultPassword?: string;
+}) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: {
+      email: defaultEmail ?? "",
+      password: defaultPassword ?? "",
+    },
   });
 
   function onSubmit(values: SignInInput) {

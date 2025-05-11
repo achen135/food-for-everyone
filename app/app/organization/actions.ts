@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { getMyOrganization, upsertMyOrganization } from "@/lib/db";
+import {
+  getMyOrganization,
+  getMyProfile,
+  upsertMyOrganization,
+} from "@/lib/db";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -61,6 +65,14 @@ export async function saveOrganizationAction(
   const userId = await currentUserId();
   if (!userId) {
     return { ok: false, message: "Your session expired. Sign in again." };
+  }
+
+  // RLS lets any authenticated user update their own org — read-only for the
+  // demo account has to be enforced here, not by hiding the Save button. See
+  // Spec §10, the M2 review lesson this checkpoint exists to fix.
+  const profile = await getMyProfile();
+  if (profile?.is_demo) {
+    return { ok: false, message: "This is a read-only demo account." };
   }
 
   const parsed = organizationSchema.safeParse(input);

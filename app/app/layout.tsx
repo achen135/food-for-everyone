@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { InfoIcon } from "lucide-react";
 
 import { getOrCreateProfile } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
@@ -61,6 +62,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      {profile.is_demo ? (
+        <div className="bg-brand-amber/12 border-brand-amber/30 border-b">
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-6 py-2 text-sm">
+            <InfoIcon
+              className="text-brand-amber size-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              You&rsquo;re viewing a read-only demo. Posting, claiming, and
+              profile edits are disabled.
+            </span>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
         {children}
       </div>

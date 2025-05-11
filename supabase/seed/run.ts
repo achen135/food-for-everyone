@@ -21,6 +21,8 @@ import { readFileSync } from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { SEED_ORGANIZATIONS, type SeedOrganization } from "./organizations.ts";
+import { DEMO_ORGANIZATION } from "./demo-account.ts";
+import { DEMO_EMAIL, DEMO_PASSWORD } from "../../lib/demo.ts";
 
 /** Reserved TLD (RFC 2606) — these addresses can never be delivered to. */
 const SEED_EMAIL_DOMAIN = "seed.foodforeveryone.invalid";
@@ -73,6 +75,88 @@ async function listSeedUsers(
     }
     if (data.users.length < PAGE_SIZE) return found;
   }
+}
+
+/** Paginated lookup by exact email — the demo account isn't on the seed domain. */
+async function findUserByEmail(
+  admin: SupabaseClient,
+  email: string,
+): Promise<{ id: string } | null> {
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: PAGE_SIZE,
+    });
+    if (error) throw error;
+    const found = data.users.find((u) => u.email === email);
+    if (found) return { id: found.id };
+    if (data.users.length < PAGE_SIZE) return null;
+  }
+}
+
+/**
+ * The public read-only demo account (Spec §10). Deliberately outside
+ * `--reset`'s deletion pass: its credentials are fixed, so deleting and
+ * recreating it converges on the same state anyway, but would invalidate any
+ * session someone happens to be using it in right now for no benefit.
+ */
+async function seedDemoAccount(
+  admin: SupabaseClient,
+): Promise<"created" | "updated"> {
+  const existing = await findUserByEmail(admin, DEMO_EMAIL);
+  let userId: string;
+  let result: "created" | "updated";
+
+  if (!existing) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: DEMO_EMAIL,
+      password: DEMO_PASSWORD,
+      email_confirm: true,
+      user_metadata: { full_name: "Demo Account" },
+    });
+    if (error) throw new Error(`createUser ${DEMO_EMAIL}: ${error.message}`);
+    userId = data.user.id;
+    result = "created";
+  } else {
+    userId = existing.id;
+    // Re-assert the published password every run, in case it drifted (e.g.
+    // someone signed in and changed it) — it needs to keep matching the README.
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      password: DEMO_PASSWORD,
+    });
+    if (error) throw new Error(`updateUser ${DEMO_EMAIL}: ${error.message}`);
+    result = "updated";
+  }
+
+  // Upsert rather than update: don't assume the handle_new_user trigger has
+  // necessarily run yet by this point.
+  const { error: profileError } = await admin
+    .from("profiles")
+    .upsert({ id: userId, is_demo: true }, { onConflict: "id" });
+  if (profileError) {
+    throw new Error(`profiles.upsert ${DEMO_EMAIL}: ${profileError.message}`);
+  }
+
+  const { error: orgError } = await admin.from("organizations").upsert(
+    {
+      owner_id: userId,
+      name: DEMO_ORGANIZATION.name,
+      type: DEMO_ORGANIZATION.type,
+      description: DEMO_ORGANIZATION.description,
+      email: DEMO_ORGANIZATION.email,
+      phone: DEMO_ORGANIZATION.phone,
+      website: DEMO_ORGANIZATION.website,
+      address: DEMO_ORGANIZATION.address,
+      location: `POINT(${DEMO_ORGANIZATION.longitude} ${DEMO_ORGANIZATION.latitude})`,
+      verified: DEMO_ORGANIZATION.verified,
+    },
+    { onConflict: "owner_id" },
+  );
+  if (orgError) {
+    throw new Error(`organizations.upsert ${DEMO_EMAIL}: ${orgError.message}`);
+  }
+
+  return result;
 }
 
 async function main(): Promise<void> {
@@ -155,6 +239,10 @@ async function main(): Promise<void> {
       `(${donors} donors, ${SEED_ORGANIZATIONS.length - donors} recipients); ` +
       `${created} account(s) created, ${updated} reused.`,
   );
+
+  const demoResult = await seedDemoAccount(admin);
+  console.log(`Demo account ${demoResult}: ${DEMO_EMAIL}`);
+
   console.log(
     "This is seeded demo data — never describe it as real traffic (Spec §9).",
   );

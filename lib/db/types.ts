@@ -11,6 +11,12 @@ export type OrganizationType = "donor" | "recipient";
 export interface Profile {
   id: string;
   full_name: string | null;
+  /**
+   * Read-only demo account flag (M6 migration). Enforced server-side in every
+   * write path — `saveOrganizationAction` and the M6 listing/claim actions —
+   * never by hiding UI. See the M4 demo-login checkpoint in Spec §10.
+   */
+  is_demo: boolean;
   created_at: string;
 }
 
