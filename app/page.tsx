@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const metadata: Metadata = {
   description:
@@ -91,6 +92,7 @@ function SiteHeader() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
             <Link href="/sign-in">Sign in</Link>
           </Button>
@@ -161,80 +163,92 @@ function MapIllustration({ className }: { className?: string }) {
       aria-label="Illustration of a city map with donor and recipient pins"
       className={className}
     >
-      <rect width="620" height="462" fill="#EFF4EC" />
+      <rect width="620" height="462" fill="var(--illus-paper)" />
       <path
         d="M-20 120 H640"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="12"
         strokeLinecap="round"
       />
       <path
         d="M-20 300 H640"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="18"
         strokeLinecap="round"
       />
       <path
         d="M140 -20 V500"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="12"
         strokeLinecap="round"
       />
       <path
         d="M420 -20 V500"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="16"
         strokeLinecap="round"
       />
       <path
         d="M-20 210 L200 210 L260 150 L640 150"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="9"
         strokeLinecap="round"
       />
       <path
         d="M300 500 L300 360 L500 360 L560 300"
-        stroke="#DCE6D6"
+        stroke="var(--illus-road)"
         strokeWidth="9"
         strokeLinecap="round"
       />
       <path
         d="M470 330 C520 330 560 360 590 410 C598 424 604 452 604 470 L470 470 Z"
-        fill="#DBEBCF"
+        fill="var(--illus-park)"
       />
       <path
         d="M40 350 q60 -40 130 -20 q40 40 -10 90 q-90 20 -120 -70Z"
-        fill="#D6E7EC"
+        fill="var(--illus-water)"
       />
       <path
         d="M214 214 C 270 250, 330 250, 372 300"
-        stroke="#93A29A"
+        stroke="var(--illus-route)"
         strokeWidth="2"
         strokeDasharray="1 7"
         strokeLinecap="round"
       />
-      <MapPin x={196} y={178} size="lg" color="#E8A33D" />
-      <MapPin x={354} y={264} size="lg" color="#1F6E43" halo />
-      <MapPin x={96} y={236} size="sm" color="#1F6E43" />
-      <MapPin x={470} y={120} size="sm" color="#E8A33D" />
-      <MapPin x={300} y={380} size="sm" color="#1F6E43" />
-      <MapPin x={520} y={250} size="sm" color="#E8A33D" />
+      <MapPin x={196} y={178} size="lg" color="var(--brand-amber)" />
+      <MapPin x={354} y={264} size="lg" color="var(--brand)" halo />
+      <MapPin x={96} y={236} size="sm" color="var(--brand)" />
+      <MapPin x={470} y={120} size="sm" color="var(--brand-amber)" />
+      <MapPin x={300} y={380} size="sm" color="var(--brand)" />
+      <MapPin x={520} y={250} size="sm" color="var(--brand-amber)" />
       <g transform="translate(32,384)">
-        <rect width="176" height="62" rx="12" fill="#FFFFFF" />
+        <rect width="176" height="62" rx="12" fill="var(--illus-card)" />
         <rect
           x="0.5"
           y="0.5"
           width="175"
           height="61"
           rx="11.5"
-          stroke="#E4E7E2"
+          stroke="var(--illus-card-border)"
         />
-        <circle cx="22" cy="22" r="6" fill="#E8A33D" />
-        <text x="38" y="27" fontSize="13" fontWeight="600" fill="#1A2B22">
+        <circle cx="22" cy="22" r="6" fill="var(--brand-amber)" />
+        <text
+          x="38"
+          y="27"
+          fontSize="13"
+          fontWeight="600"
+          fill="var(--illus-ink)"
+        >
           Food donors
         </text>
-        <circle cx="22" cy="42" r="6" fill="#1F6E43" />
-        <text x="38" y="47" fontSize="13" fontWeight="600" fill="#1A2B22">
+        <circle cx="22" cy="42" r="6" fill="var(--brand)" />
+        <text
+          x="38"
+          y="47"
+          fontSize="13"
+          fontWeight="600"
+          fill="var(--illus-ink)"
+        >
           Recipients
         </text>
       </g>
@@ -282,14 +296,14 @@ function MapPin({
         cy={r * 2.86}
         rx={r * 0.71}
         ry={r * 0.25}
-        fill="#1A2B22"
+        fill="var(--illus-shadow)"
         opacity="0.13"
       />
       {halo ? (
         <circle cx={r} cy={r} r={r * 1.86} fill={color} opacity="0.12" />
       ) : null}
       <path d={d} fill={color} />
-      <circle cx={r} cy={r} r={dotR} fill="#FFFFFF" />
+      <circle cx={r} cy={r} r={dotR} fill="var(--illus-pin-dot)" />
     </g>
   );
 }

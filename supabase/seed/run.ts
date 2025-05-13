@@ -100,12 +100,51 @@ async function findUserByEmail(
  * recreating it converges on the same state anyway, but would invalidate any
  * session someone happens to be using it in right now for no benefit.
  */
+/**
+ * Can someone actually sign in with the credentials the README publishes?
+ *
+ * Uses the anon key and a throwaway client — exactly the path a visitor takes,
+ * so this checks the thing that matters rather than a proxy for it.
+ */
+async function publishedPasswordWorks(): Promise<boolean> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    // Without the anon key we can't tell, and recreating the account on a
+    // guess would needlessly invalidate a working demo. Leave it alone.
+    console.log(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY not set — skipping the demo password check.",
+    );
+    return true;
+  }
+  const probe = createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error } = await probe.auth.signInWithPassword({
+    email: DEMO_EMAIL,
+    password: DEMO_PASSWORD,
+  });
+  return !error;
+}
+
 async function seedDemoAccount(
   admin: SupabaseClient,
 ): Promise<"created" | "updated"> {
-  const existing = await findUserByEmail(admin, DEMO_EMAIL);
+  let existing = await findUserByEmail(admin, DEMO_EMAIL);
   let userId: string;
   let result: "created" | "updated";
+
+  // The demo's credentials are immutable (the protect_demo_credentials trigger
+  // blocks password and email changes, including this script's — see that
+  // migration for why it has no admin exemption). So the repair path is to
+  // recreate the account, and the only reason to reach for it is that the
+  // published password has actually stopped working.
+  if (existing && !(await publishedPasswordWorks())) {
+    console.log("Demo password no longer matches the README — recreating.");
+    const { error } = await admin.auth.admin.deleteUser(existing.id);
+    if (error) throw new Error(`deleteUser ${DEMO_EMAIL}: ${error.message}`);
+    existing = null;
+  }
 
   if (!existing) {
     const { data, error } = await admin.auth.admin.createUser({
@@ -118,13 +157,9 @@ async function seedDemoAccount(
     userId = data.user.id;
     result = "created";
   } else {
+    // Credentials already correct; only the profile and org rows below need
+    // re-asserting, and those go through the service role, which RLS exempts.
     userId = existing.id;
-    // Re-assert the published password every run, in case it drifted (e.g.
-    // someone signed in and changed it) — it needs to keep matching the README.
-    const { error } = await admin.auth.admin.updateUserById(userId, {
-      password: DEMO_PASSWORD,
-    });
-    if (error) throw new Error(`updateUser ${DEMO_EMAIL}: ${error.message}`);
     result = "updated";
   }
 

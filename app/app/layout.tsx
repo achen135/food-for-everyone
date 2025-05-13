@@ -7,6 +7,7 @@ import { getOrCreateProfile } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
@@ -46,6 +47,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="text-muted-foreground flex items-center gap-3 text-sm">
+            <ThemeToggle />
             <span className="hidden sm:inline">
               {profile.full_name ?? user.email}
             </span>

@@ -22,9 +22,12 @@ this app pre-fills the credentials below — just press "Sign in".
 | Password | `see-the-map-2025`             |
 
 It's a real account against the seeded Chicago dataset (~30 organizations) — **read-only**,
-enforced server-side rather than by hiding buttons: posting, claiming, and profile edits
-all return "This is a read-only demo account." The app labels it the same way, so it's
-never mistaken for a real listing on the map.
+enforced in the database rather than in the UI or the application layer. That distinction
+matters here: the password above is public, so the restriction has to hold against someone
+using the anon key against the REST API directly, not just against someone clicking around
+the app. Row Level Security refuses its writes, column privileges stop it clearing its own
+demo flag, and a trigger keeps it from changing the published password and locking everyone
+else out. The app labels it too, so it's never mistaken for a real listing on the map.
 
 > **No public link yet.** Vercel Deployment Protection is currently on, so every
 > production URL redirects to a Vercel SSO login instead of the app — and

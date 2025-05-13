@@ -98,6 +98,23 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /*
+   * Hero illustration (app/page.tsx). The drawing is a fixed-palette artwork
+   * rather than UI, so its colours live here as their own tokens instead of
+   * being borrowed from the semantic set — that keeps the map legible in both
+   * themes without dragging component colours around to suit a picture.
+   */
+  --illus-paper: #eff4ec;
+  --illus-road: #dce6d6;
+  --illus-park: #dbebcf;
+  --illus-water: #d6e7ec;
+  --illus-route: #93a29a;
+  --illus-card: #ffffff;
+  --illus-card-border: #e4e7e2;
+  --illus-ink: #1a2b22;
+  --illus-shadow: #1a2b22;
+  --illus-pin-dot: #ffffff;
 }
 
 .dark {
@@ -137,6 +154,20 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Same drawing, night-time palette — see the light block for why. */
+  --illus-paper: #172019;
+  --illus-road: #24312a;
+  --illus-park: #1e2c22;
+  --illus-water: #1b2a2e;
+  --illus-route: #5d6d64;
+  --illus-card: #1a241e;
+  --illus-card-border: #2c3a32;
+  --illus-ink: #e8ece8;
+  --illus-shadow: #000000;
+  /* A dark dot reads as a hole punched in the bright pin; white would wash out
+     against the lighter dark-mode brand green. */
+  --illus-pin-dot: #121a16;
 }
 
 @layer base {
@@ -154,5 +185,25 @@
   h3,
   h4 {
     @apply font-heading;
+  }
+}
+
+/*
+ * Spec §8: honour `prefers-reduced-motion`.
+ *
+ * The landing page has no motion of its own, but `tw-animate-css` drives the
+ * dialog enter/exit, the sonner toasts, and the map's loading skeleton. Those
+ * come from vendored component classes, so the guard belongs here rather than
+ * on each component. Near-zero rather than `none` so animation/transition end
+ * events still fire and nothing waiting on them hangs.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
