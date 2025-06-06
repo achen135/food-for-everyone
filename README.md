@@ -12,29 +12,29 @@ page. Try it without an account — see **Live demo** below.
 
 ## Live demo
 
-The map and listings are auth-gated, so a bare URL shows a visitor nothing on its own.
-The demo account gets past that in one click: `/sign-in?demo=1` on any deployment of
-this app pre-fills the credentials below — just press "Sign in".
+**→ [food-for-everyone-app.vercel.app](https://food-for-everyone-app.vercel.app)**
+
+The map and listings are auth-gated. The demo account gets past that in one click:
+**[open the demo sign-in](https://food-for-everyone-app.vercel.app/sign-in?demo=1)** —
+the credentials below are pre-filled, just press "Sign in".
 
 |          |                                |
 | -------- | ------------------------------ |
 | Email    | `demo@foodforeveryone.invalid` |
 | Password | `see-the-map-2025`             |
 
-It's a real account against the seeded Chicago dataset (~30 organizations) — **read-only**,
-enforced in the database rather than in the UI or the application layer. That distinction
-matters here: the password above is public, so the restriction has to hold against someone
-using the anon key against the REST API directly, not just against someone clicking around
-the app. Row Level Security refuses its writes, column privileges stop it clearing its own
-demo flag, and a trigger keeps it from changing the published password and locking everyone
-else out. The app labels it too, so it's never mistaken for a real listing on the map.
+It's a real account against a seeded Chicago dataset (~30 organizations) and it's
+**read-only** — the restriction is enforced in the database with Row Level Security, not
+just in the UI, because the password above is public.
 
-> **No public link yet.** Vercel Deployment Protection is currently on, so every
-> production URL redirects to a Vercel SSO login instead of the app — and
-> `food-for-everyone.vercel.app` isn't this project's domain (it resolves elsewhere).
-> Both are dashboard settings (Project → Settings → Deployment Protection; Settings →
-> Domains), not code. Until they're sorted, `npm run dev` plus the credentials above is
-> the working path — see **Getting started** below.
+## Performance
+
+`/api/orgs` sits behind an in-process token-bucket rate limiter and a read-through cache
+(TTL + stale-while-revalidate + single-flight). A local k6 run (4 VUs against local
+Postgres) measured the cache removing **~99% of database reads** on the map query;
+end-to-end latency did not move, because that endpoint is bound by auth round-trips
+rather than by the database. Full protocol, numbers, and caveats are in
+[`docs/benchmarks/`](docs/benchmarks).
 
 ## Stack
 
@@ -61,20 +61,12 @@ Apply the schema + RLS to your Supabase project:
 
 ```bash
 npx supabase link --project-ref <your-project-ref>
-npm run db:push
-```
-
-(or paste `supabase/migrations/*.sql` into the Supabase SQL editor).
-
-Check it landed — the version must appear in **both** columns:
-
-```bash
-npx supabase migration list
+npm run db:push   # or paste supabase/migrations/*.sql into the Supabase SQL editor
 ```
 
 For Google sign-in, configure the Google provider in Supabase → Authentication →
-Providers, and add `http://localhost:3000/**` plus your production URL to the
-allowed Redirect URLs.
+Providers, and add `http://localhost:3000/**` plus your production URL to the allowed
+Redirect URLs.
 
 ### Demo data
 
@@ -87,30 +79,19 @@ Creates 30 fictional organizations at real Chicago-area addresses, plus the read
 demo account above, so the map and the radius query have something to show. Needs
 `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
 
-The 30 organizations each get an `@seed.foodforeveryone.invalid` email, and the script
-only ever touches accounts on that domain (plus the one demo account, by its exact
-address) — it cannot disturb a real one. Sign in as the demo account to browse them
-immediately, or sign in as a normal user with a Chicago address of your own.
-
-**This is seeded demo data.** If it ever backs a figure in a write-up, it gets described
-as seeded — never as real usage.
-
 ## Scripts
 
-| Script                     | What it does                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------------ |
-| `npm run dev`              | Dev server (Turbopack)                                                               |
-| `npm run build`            | Production build                                                                     |
-| `npm start`                | Serve the production build                                                           |
-| `npm run lint`             | ESLint (`eslint-config-next` + Prettier compat)                                      |
-| `npm run typecheck`        | `next typegen` then `tsc --noEmit`                                                   |
-| `npm run test`             | Vitest (jsdom + React Testing Library), one run                                      |
-| `npm run test:watch`       | Vitest in watch mode                                                                 |
-| `npm run format`           | Prettier write                                                                       |
-| `npm run format:check`     | Prettier check (used in CI)                                                          |
-| `npm run check:client-env` | Verifies `NEXT_PUBLIC_*` reached the built client bundle (used in CI, after `build`) |
-| `npm run db:push`          | Apply pending migrations to the linked project                                       |
-| `npm run db:seed`          | Create the demo organizations + demo account (service role)                          |
+| Script              | What it does                                    |
+| ------------------- | ----------------------------------------------- |
+| `npm run dev`       | Dev server (Turbopack)                          |
+| `npm run build`     | Production build                                |
+| `npm start`         | Serve the production build                      |
+| `npm run lint`      | ESLint (`eslint-config-next` + Prettier compat) |
+| `npm run typecheck` | `next typegen` then `tsc --noEmit`              |
+| `npm run test`      | Vitest (jsdom + React Testing Library)          |
+| `npm run format`    | Prettier write                                  |
+| `npm run db:push`   | Apply pending migrations to the linked project  |
+| `npm run db:seed`   | Create the demo organizations + demo account    |
 
 CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, test, and build on
 every push to `main` and every pull request.
