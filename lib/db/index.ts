@@ -10,6 +10,7 @@ export {
   findCounterpartiesNear,
   getMyOrganization,
   getMyOrganizationPoint,
+  invalidateOrganizationCache,
   upsertMyOrganization,
   type CounterpartySearch,
   type OrganizationWrite,

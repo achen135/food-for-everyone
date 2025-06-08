@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   getMyOrganization,
   getMyProfile,
+  invalidateOrganizationCache,
   upsertMyOrganization,
 } from "@/lib/db";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
@@ -130,6 +131,11 @@ export async function saveOrganizationAction(
       message: "Could not save your organization. Try again.",
     };
   }
+
+  // Drop this user's cached org and map results before revalidating, so the
+  // re-render that `revalidatePath` triggers reads the row we just wrote rather
+  // than the copy cached moments ago.
+  invalidateOrganizationCache(userId);
 
   revalidatePath("/app", "layout");
   revalidatePath("/app/organization");

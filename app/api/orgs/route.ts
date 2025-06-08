@@ -3,8 +3,15 @@ import { z } from "zod";
 
 import { findCounterpartiesNear } from "@/lib/db";
 import { toFeatureCollection } from "@/lib/geojson";
+import {
+  mapQueryLimiter,
+  rateLimitHeaders,
+  rateLimitingEnabled,
+} from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { parseOrgsQuery } from "@/lib/validation/map";
+
+const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 /**
  * GET /api/orgs?near=lat,lng&radiusKm=25&q=text
@@ -32,7 +39,25 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json(
       { error: "Not signed in." },
-      { status: 401, headers: { "Cache-Control": "no-store" } },
+      { status: 401, headers: NO_STORE },
+    );
+  }
+
+  // Keyed by user, not IP: this route is authenticated, so the identity is
+  // known and exact — an IP key would lump everyone behind one NAT together
+  // and punish them for each other's traffic.
+  //
+  // Placed after the auth check so an unauthenticated flood can't consume a
+  // real user's budget, and so the limiter never allocates a bucket for a
+  // request that was going to be rejected anyway.
+  const decision = mapQueryLimiter.check(user.id);
+  if (rateLimitingEnabled() && !decision.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Try again shortly." },
+      {
+        status: 429,
+        headers: { ...NO_STORE, ...rateLimitHeaders(decision) },
+      },
     );
   }
 
@@ -43,27 +68,35 @@ export async function GET(request: NextRequest) {
         error: "Invalid query.",
         fieldErrors: z.flattenError(parsed.error).fieldErrors,
       },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE },
     );
   }
 
   const { near, radiusKm, q } = parsed.data;
 
   try {
-    const orgs = await findCounterpartiesNear({
-      latitude: near.latitude,
-      longitude: near.longitude,
-      radiusKm,
-      query: q,
-    });
+    const orgs = await findCounterpartiesNear(
+      {
+        latitude: near.latitude,
+        longitude: near.longitude,
+        radiusKm,
+        query: q,
+      },
+      { userId: user.id },
+    );
 
     return NextResponse.json(toFeatureCollection(orgs), {
-      headers: { "Cache-Control": "no-store" },
+      // `no-store` still applies even though we cache server-side. The two are
+      // different things: our cache is keyed by user and lives in this process,
+      // while this header governs shared caches we do not control. A CDN
+      // holding one org's view of the directory and replaying it to another is
+      // exactly the leak the M3 review guarded against.
+      headers: { ...NO_STORE, ...rateLimitHeaders(decision) },
     });
   } catch {
     return NextResponse.json(
       { error: "Could not load the map right now." },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
+      { status: 500, headers: NO_STORE },
     );
   }
 }
