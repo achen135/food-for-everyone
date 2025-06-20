@@ -33,6 +33,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-posted: var(--chart-posted);
+  --color-chart-completed: var(--chart-completed);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-track: var(--chart-track);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -85,11 +89,32 @@
   --border: #e4e7e2;
   --input: #e4e7e2;
   --ring: #1f6e43;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /*
+   * Chart palette (M8). These replace shadcn's grey placeholders, which nothing
+   * had used. Not eyeballed: every value below was checked against the
+   * lightness band, chroma floor, protan/deutan separation, normal-vision
+   * floor, and contrast-vs-surface, measured against --card (the surface the
+   * charts actually sit on) rather than --background. Dark mode has its own
+   * steps further down — it is a separate selection, not an inversion of these,
+   * because the same two hues fail the dark band. See docs/Design Decisions.md.
+   *
+   * Two series, fixed identity everywhere they appear: posted = amber,
+   * completed = green. Green is the brand and reads as the good outcome; the
+   * pair separates at ΔE 13.8 under protanopia here.
+   *
+   * --chart-1..5 are one hue, light→dark: an *ordinal* ramp for the distance
+   * bands, where the order of the categories is the point.
+   */
+  --chart-posted: #c08420; /* deepened amber — #e8a33d is only 2.1:1 on white */
+  --chart-completed: #1f6e43;
+  --chart-1: #8ac09d;
+  --chart-2: #6ea884;
+  --chart-3: #53916c;
+  --chart-4: #377b54;
+  --chart-5: #14653d;
+  --chart-grid: #eceee9; /* hairline, one step off the card */
+  --chart-track: #e6efe8; /* meter track: a lighter step of the fill's ramp */
+
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -141,11 +166,24 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: #5fb37e;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /*
+   * Dark-mode chart steps, selected against --card (#1a241e) rather than
+   * derived from the light set. The light pair fails outright here: dark mode's
+   * lightness band tops out around L 0.67 and both #1f6e43's counterpart and
+   * the amber sit above it, so both hues are re-stepped. The ordinal ramp also
+   * reverses — its light end is now the *high* end, and its darkest step still
+   * clears 2:1 against the card.
+   */
+  --chart-posted: #cd8134;
+  --chart-completed: #56a978;
+  --chart-1: #2c6946;
+  --chart-2: #3d835a;
+  --chart-3: #4f9e70;
+  --chart-4: #61b985;
+  --chart-5: #74d69c;
+  --chart-grid: #26332c;
+  --chart-track: #24322b;
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

@@ -119,6 +119,76 @@ export interface MyClaim {
   donor_phone: string | null;
 }
 
+// ------------------------------------------------------------- M8 analytics
+
+/**
+ * `network_overview()` — network-wide counts. Aggregate only: no organization
+ * is named and no coordinate is returned, which is what makes it safe to show
+ * to any signed-in caller. See the M8 migration header for the per-metric
+ * global-vs-scoped decision.
+ */
+export interface NetworkOverview {
+  donor_orgs: number;
+  recipient_orgs: number;
+  total_listings: number;
+  /** Open *and* still collectable — expiry is derived, never stored. */
+  open_listings: number;
+  claimed_listings: number;
+  completed_listings: number;
+  active_claims: number;
+}
+
+/** One gap-filled day of `network_activity_daily`. `day` is a UTC date. */
+export interface NetworkActivityDay {
+  day: string;
+  posted: number;
+  completed: number;
+}
+
+/** One distance band of `network_reach`. */
+export interface NetworkReachBand {
+  bucket: string;
+  bucket_order: number;
+  donations: number;
+}
+
+/**
+ * `my_activity_summary()` — the caller's own organization.
+ *
+ * Both halves are always present; in practice a donor's claim counts are zero
+ * and a recipient's listing counts are, because `create_listing` requires a
+ * donor and `claim_listing` a recipient. `role` says which half to read.
+ *
+ * `fulfilment_rate` is a percentage, or null when nothing has finished yet.
+ * The numerator and denominator come with it so the UI can show the fraction
+ * behind the percentage rather than asking the reader to trust it.
+ */
+export interface MyActivitySummary {
+  role: OrganizationType;
+  listings_posted: number;
+  listings_open: number;
+  listings_expired: number;
+  listings_claimed: number;
+  listings_completed: number;
+  listings_cancelled: number;
+  claims_made: number;
+  claims_active: number;
+  claims_completed: number;
+  claims_released: number;
+  fulfilment_numerator: number;
+  fulfilment_denominator: number;
+  fulfilment_rate: number | null;
+}
+
+/** One gap-filled day of `my_activity_daily`. */
+export interface MyActivityDay {
+  day: string;
+  listings_posted: number;
+  listings_completed: number;
+  claims_made: number;
+  claims_completed: number;
+}
+
 /**
  * One row from the `organizations_near` RPC — what a counterparty is allowed to
  * see. Deliberately narrower than `Organization`: no `owner_id`, no timestamps,

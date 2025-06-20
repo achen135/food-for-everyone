@@ -5,6 +5,13 @@
  */
 
 export { getReadCount, resetReadCount, tracked } from "@/lib/db/instrument";
+export {
+  getMyActivityDaily,
+  getMyActivitySummary,
+  getNetworkActivityDaily,
+  getNetworkOverview,
+  getNetworkReach,
+} from "@/lib/db/analytics";
 export { getMyProfile, getOrCreateProfile } from "@/lib/db/profiles";
 export {
   findCounterpartiesNear,
@@ -32,8 +39,13 @@ export type {
   LatLng,
   ListingActionCode,
   ListingStatus,
+  MyActivityDay,
+  MyActivitySummary,
   MyClaim,
   MyListing,
+  NetworkActivityDay,
+  NetworkOverview,
+  NetworkReachBand,
   OpenListing,
   Organization,
   OrganizationType,

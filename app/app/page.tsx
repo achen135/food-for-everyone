@@ -83,9 +83,14 @@ export default async function AppHomePage() {
             ) : null}
           </dl>
 
-          <p className="text-muted-foreground text-sm">
-            The map of nearby counterparties opens in M3.
-          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/app/map">See nearby organizations</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/app/analytics">View analytics</Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="border-border grid gap-3 rounded-xl border border-dashed p-6">

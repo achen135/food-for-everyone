@@ -6,6 +6,11 @@ import Home from "@/app/page";
 import { ListingForm } from "@/components/listings/listing-form";
 import { OrganizationForm } from "@/components/organization/organization-form";
 import { SignInForm } from "@/components/auth/sign-in-form";
+import { ActivityChart } from "@/components/analytics/activity-chart";
+import { FulfilmentMeter } from "@/components/analytics/fulfilment-meter";
+import { ReachChart } from "@/components/analytics/reach-chart";
+import { HeroStat, StatTile } from "@/components/analytics/stat-tile";
+import { NETWORK_LABELS } from "@/lib/analytics";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -63,5 +68,57 @@ describe("accessibility", () => {
 
   it("listing form has no axe violations", async () => {
     await expectNoViolations(<ListingForm />);
+  });
+
+  /*
+   * The M8 dashboard adds the shapes axe is actually good at judging: a
+   * `role="meter"` that needs its value attributes, a `<details>` disclosure, a
+   * data table that needs real header cells, and `<dt>`/`<dd>` pairs that are
+   * only valid inside a `<dl>`. Colour is the one thing these checks cannot
+   * cover here (see the note above) — that was handled separately, by running
+   * the palette through a contrast and colour-vision validator.
+   */
+  it("activity chart has no axe violations", async () => {
+    const points = Array.from({ length: 30 }, (_, i) => ({
+      day: `2026-06-${String((i % 28) + 1).padStart(2, "0")}`,
+      posted: i % 4,
+      completed: i % 3,
+    }));
+    await expectNoViolations(
+      <ActivityChart points={points} labels={NETWORK_LABELS} />,
+    );
+  });
+
+  it("reach chart has no axe violations", async () => {
+    await expectNoViolations(
+      <ReachChart
+        bands={[
+          { bucket: "Under 5 km", bucket_order: 1, donations: 21 },
+          { bucket: "10–25 km", bucket_order: 3, donations: 103 },
+        ]}
+      />,
+    );
+  });
+
+  it("fulfilment meter has no axe violations", async () => {
+    await expectNoViolations(
+      <FulfilmentMeter
+        fulfilment={{
+          rate: 61.6,
+          numerator: 154,
+          denominator: 250,
+          detail: "154 of 250 listings that finished",
+        }}
+      />,
+    );
+  });
+
+  it("stat figures have no axe violations", async () => {
+    await expectNoViolations(
+      <dl>
+        <HeroStat label="Donations completed" value={154} hint="from 263" />
+        <StatTile label="Open right now" value={10} hint="Still collectable" />
+      </dl>,
+    );
   });
 });

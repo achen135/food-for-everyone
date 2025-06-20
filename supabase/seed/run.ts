@@ -1,8 +1,9 @@
 /**
- * Seed the database with demo organizations.
+ * Seed the database with demo organizations and their historical activity.
  *
- *   npm run db:seed          # create any missing seed orgs
- *   npm run db:seed -- --reset   # delete all seed accounts first, then create
+ *   npm run db:seed                     # create any missing seed orgs + activity
+ *   npm run db:seed -- --reset          # delete all seed accounts first, then create
+ *   npm run db:seed -- --reset-activity # regenerate listings/claims only
  *
  * Needs `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in
  * `.env.local`. The service-role key bypasses RLS — that is exactly why this is
@@ -22,6 +23,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { SEED_ORGANIZATIONS, type SeedOrganization } from "./organizations.ts";
 import { DEMO_ORGANIZATION } from "./demo-account.ts";
+import { planActivity } from "./activity.ts";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "../../lib/demo.ts";
 
 /** Reserved TLD (RFC 2606) — these addresses can never be delivered to. */
@@ -129,7 +131,7 @@ async function publishedPasswordWorks(): Promise<boolean> {
 
 async function seedDemoAccount(
   admin: SupabaseClient,
-): Promise<"created" | "updated"> {
+): Promise<{ result: "created" | "updated"; organizationId: string }> {
   let existing = await findUserByEmail(admin, DEMO_EMAIL);
   let userId: string;
   let result: "created" | "updated";
@@ -172,26 +174,99 @@ async function seedDemoAccount(
     throw new Error(`profiles.upsert ${DEMO_EMAIL}: ${profileError.message}`);
   }
 
-  const { error: orgError } = await admin.from("organizations").upsert(
-    {
-      owner_id: userId,
-      name: DEMO_ORGANIZATION.name,
-      type: DEMO_ORGANIZATION.type,
-      description: DEMO_ORGANIZATION.description,
-      email: DEMO_ORGANIZATION.email,
-      phone: DEMO_ORGANIZATION.phone,
-      website: DEMO_ORGANIZATION.website,
-      address: DEMO_ORGANIZATION.address,
-      location: `POINT(${DEMO_ORGANIZATION.longitude} ${DEMO_ORGANIZATION.latitude})`,
-      verified: DEMO_ORGANIZATION.verified,
-    },
-    { onConflict: "owner_id" },
-  );
+  const { data: org, error: orgError } = await admin
+    .from("organizations")
+    .upsert(
+      {
+        owner_id: userId,
+        name: DEMO_ORGANIZATION.name,
+        type: DEMO_ORGANIZATION.type,
+        description: DEMO_ORGANIZATION.description,
+        email: DEMO_ORGANIZATION.email,
+        phone: DEMO_ORGANIZATION.phone,
+        website: DEMO_ORGANIZATION.website,
+        address: DEMO_ORGANIZATION.address,
+        location: `POINT(${DEMO_ORGANIZATION.longitude} ${DEMO_ORGANIZATION.latitude})`,
+        verified: DEMO_ORGANIZATION.verified,
+      },
+      { onConflict: "owner_id" },
+    )
+    .select("id")
+    .single();
   if (orgError) {
     throw new Error(`organizations.upsert ${DEMO_EMAIL}: ${orgError.message}`);
   }
 
-  return result;
+  return { result, organizationId: org.id as string };
+}
+
+/**
+ * Historical listings and claims for the seeded organizations (M8).
+ *
+ * Scoped the same way everything else in this script is: every row written here
+ * belongs to an organization owned by a `*@SEED_EMAIL_DOMAIN` account or by the
+ * demo account. Nothing outside that set is read, updated, or deleted, which is
+ * what makes the script safe to point at production.
+ *
+ * Idempotent and non-destructive by default: if those organizations already
+ * hold listings, it leaves them alone. `--reset-activity` regenerates them, and
+ * `--reset` gets there anyway because deleting a seed account cascades through
+ * `organizations.owner_id` to its listings and claims. The demo organization is
+ * not deleted by `--reset` (its credentials are published), so its rows are
+ * cleared explicitly.
+ */
+async function seedActivity(
+  admin: SupabaseClient,
+  orgIds: { donors: string[]; recipients: string[]; demo: string | null },
+  options: { regenerate: boolean },
+): Promise<{ listings: number; claims: number } | "skipped"> {
+  const owned = [...orgIds.donors, ...orgIds.recipients];
+  if (orgIds.demo) owned.push(orgIds.demo);
+
+  const { count: existingCount, error: countError } = await admin
+    .from("listings")
+    .select("id", { count: "exact", head: true })
+    .in("organization_id", owned);
+  if (countError) throw new Error(`listings.count: ${countError.message}`);
+
+  if ((existingCount ?? 0) > 0) {
+    if (!options.regenerate) return "skipped";
+    console.log(`Clearing ${existingCount} seeded listing(s)…`);
+    // Claims go with them: claims.listing_id is ON DELETE CASCADE.
+    const { error } = await admin
+      .from("listings")
+      .delete()
+      .in("organization_id", owned);
+    if (error) throw new Error(`listings.delete: ${error.message}`);
+  }
+
+  const plan = planActivity({
+    donorIds: orgIds.donors,
+    recipientIds: orgIds.recipients,
+    demoDonorId: orgIds.demo,
+    now: new Date(),
+  });
+
+  // Chunked so one oversized request body can't fail the whole run. Listings
+  // first — claims carry a foreign key to them.
+  for (const chunk of chunked(plan.listings, 200)) {
+    const { error } = await admin.from("listings").insert(chunk);
+    if (error) throw new Error(`listings.insert: ${error.message}`);
+  }
+  for (const chunk of chunked(plan.claims, 200)) {
+    const { error } = await admin.from("claims").insert(chunk);
+    if (error) throw new Error(`claims.insert: ${error.message}`);
+  }
+
+  return { listings: plan.listings.length, claims: plan.claims.length };
+}
+
+function chunked<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
 }
 
 async function main(): Promise<void> {
@@ -209,12 +284,22 @@ async function main(): Promise<void> {
   }
 
   const reset = process.argv.includes("--reset");
+  const resetActivity = reset || process.argv.includes("--reset-activity");
   const admin = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
   console.log(`Target: ${url}`);
   console.log(`Seed accounts: *@${SEED_EMAIL_DOMAIN}`);
+
+  // `.env.local` normally points at the linked *production* project, so a bare
+  // `npm run db:seed` writes there. That is often what you want, but it should
+  // never be a surprise — the same footgun in the M7 benchmark protocol
+  // (`db push` vs `db reset`) was caught in review rather than before the fact.
+  // For local work, override the two variables on the command line.
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url)) {
+    console.log("⚠  This is a REMOTE project, not the local stack.");
+  }
 
   const existing = await listSeedUsers(admin);
 
@@ -230,6 +315,12 @@ async function main(): Promise<void> {
   const byEmail = new Map(existing.map((u) => [u.email, u.id]));
   let created = 0;
   let updated = 0;
+
+  // Collected in `SEED_ORGANIZATIONS` order, not database order, so the
+  // activity plan below is reproducible: the same donor always draws the same
+  // listings from the same PRNG sequence.
+  const donorIds: string[] = [];
+  const recipientIds: string[] = [];
 
   for (const org of SEED_ORGANIZATIONS) {
     const email = seedEmail(org);
@@ -249,23 +340,29 @@ async function main(): Promise<void> {
       updated += 1;
     }
 
-    const { error } = await admin.from("organizations").upsert(
-      {
-        owner_id: userId,
-        name: org.name,
-        type: org.type,
-        description: org.description,
-        email: org.email,
-        phone: org.phone,
-        website: org.website,
-        address: org.address,
-        // geography(Point,4326) — longitude first, as WKT.
-        location: `POINT(${org.longitude} ${org.latitude})`,
-        verified: org.verified,
-      },
-      { onConflict: "owner_id" },
-    );
+    const { data: row, error } = await admin
+      .from("organizations")
+      .upsert(
+        {
+          owner_id: userId,
+          name: org.name,
+          type: org.type,
+          description: org.description,
+          email: org.email,
+          phone: org.phone,
+          website: org.website,
+          address: org.address,
+          // geography(Point,4326) — longitude first, as WKT.
+          location: `POINT(${org.longitude} ${org.latitude})`,
+          verified: org.verified,
+        },
+        { onConflict: "owner_id" },
+      )
+      .select("id")
+      .single();
     if (error) throw new Error(`upsert ${org.name}: ${error.message}`);
+
+    (org.type === "donor" ? donorIds : recipientIds).push(row.id as string);
   }
 
   const donors = SEED_ORGANIZATIONS.filter((o) => o.type === "donor").length;
@@ -275,8 +372,25 @@ async function main(): Promise<void> {
       `${created} account(s) created, ${updated} reused.`,
   );
 
-  const demoResult = await seedDemoAccount(admin);
-  console.log(`Demo account ${demoResult}: ${DEMO_EMAIL}`);
+  const demo = await seedDemoAccount(admin);
+  console.log(`Demo account ${demo.result}: ${DEMO_EMAIL}`);
+
+  const activity = await seedActivity(
+    admin,
+    { donors: donorIds, recipients: recipientIds, demo: demo.organizationId },
+    { regenerate: resetActivity },
+  );
+  if (activity === "skipped") {
+    console.log(
+      "Activity: already seeded — left as is. " +
+        "Use `--reset-activity` to regenerate it.",
+    );
+  } else {
+    console.log(
+      `Activity: ${activity.listings} listings, ${activity.claims} claims ` +
+        "over the last 90 days.",
+    );
+  }
 
   console.log(
     "This is seeded demo data — never describe it as real traffic (Spec §9).",
