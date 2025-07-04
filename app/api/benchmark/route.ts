@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAuthCallCount, resetAuthCallCount } from "@/lib/auth/user";
 import { appCache } from "@/lib/cache";
 import { getReadCount, resetReadCount } from "@/lib/db";
 
@@ -33,6 +34,9 @@ export async function GET() {
   return NextResponse.json(
     {
       dbReads: getReadCount(),
+      // M9: GoTrue round-trips. `getAuthenticatedUser` memoises per request, so
+      // this should track requests, not call sites — see lib/auth/user.ts.
+      authCalls: getAuthCallCount(),
       cache: appCache.stats(),
       config: {
         cacheEnabled: process.env.CACHE_DISABLED !== "1",
@@ -47,6 +51,7 @@ export async function DELETE() {
   if (!enabled()) return NOT_FOUND;
 
   resetReadCount();
+  resetAuthCallCount();
   appCache.resetStats();
   // Entries too, not just the statistics — a run that starts with a warm cache
   // from the previous run measures the wrong thing.

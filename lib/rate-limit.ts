@@ -185,6 +185,34 @@ export const mapQueryLimiter = new TokenBucketLimiter({
   refillPerSecond: 0.5,
 });
 
+/**
+ * Limiter for the address-search Server Action (M9). Tighter than the map's,
+ * because the two are shaped nothing alike: the map refetches on every pan and
+ * radius change, while address search is a button a user presses a handful of
+ * times while setting up their organization. A burst of 6 covers fixing a typo
+ * and trying a couple of phrasings; 12/minute sustained is well past normal use
+ * and well short of abuse.
+ *
+ * **This limiter does not enforce Nominatim's policy and must not be mistaken
+ * for the thing that does.** Its budget is per user, and the policy is a single
+ * application-wide ceiling on our egress IP — thirty users inside their own
+ * budgets would blow through it. `nominatimPacer` (lib/pace.ts) is what
+ * enforces the policy; this stops one account eating the shared budget before
+ * anyone else can.
+ *
+ * Note also that this one lives in a Server Action rather than behind RLS,
+ * which everywhere else in this codebase would be a mistake (CLAUDE.md: "a
+ * guard in a Server Action is not a boundary"). It is acceptable *only* because
+ * what it protects is a third party's rate budget, not our data: the worst a
+ * caller who bypasses it can do is reach `nominatimPacer`, which is not
+ * bypassable from outside the process. Do not copy this placement for anything
+ * guarding a table.
+ */
+export const geocodeLimiter = new TokenBucketLimiter({
+  capacity: 6,
+  refillPerSecond: 0.2,
+});
+
 /** Set `RATE_LIMIT_DISABLED=1` for the read-count leg of the benchmark (Spec §9). */
 export function rateLimitingEnabled(): boolean {
   return process.env.RATE_LIMIT_DISABLED !== "1";

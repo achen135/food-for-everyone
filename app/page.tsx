@@ -9,6 +9,7 @@ import {
   UserPlusIcon,
 } from "lucide-react";
 
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -154,82 +155,142 @@ function Hero() {
   );
 }
 
-/** Decorative — a real map is what's behind the auth wall. */
+/**
+ * Decorative — a real map is what's behind the auth wall.
+ *
+ * Rebuilt in M9 because two of the shapes did not read. The park was a wedge
+ * clipped by the viewBox with no trees or paths, and the water was a closed
+ * blob touching no edge, which is not what water looks like on any map. Both
+ * were also *measurably* invisible: park and road sat ΔE 1.9 apart under normal
+ * vision (2.3 in dark mode), against a floor of 15. They were the same colour.
+ *
+ * The fix is shape and colour together, since either alone was insufficient:
+ *   - the river enters and leaves the canvas and carries a shoreline, so it
+ *     reads as water rather than as a puddle;
+ *   - a road bridges it, which is a thing that only happens over water;
+ *   - the park is a whole road-bounded block with tree cover and a footpath,
+ *     rather than a corner the frame happens to cut off;
+ *   - the donor→recipient match line is now thick enough to notice, and is the
+ *     one element that illustrates what the product actually does — so it gets
+ *     a legend entry, while the park and water are expected to carry themselves.
+ *
+ * Colours are validated, not chosen — see docs/Design Decisions.md. This must
+ * stay recognisably an illustration; it is not meant to pass for a screenshot.
+ */
 function MapIllustration({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 620 462"
       role="img"
-      aria-label="Illustration of a city map with donor and recipient pins"
+      aria-label="Illustration of a city map: a river crossed by a bridge, a park with trees, and pins marking food donors and recipients, with a dashed line linking one donor to a nearby recipient."
       className={className}
     >
       <rect width="620" height="462" fill="var(--illus-paper)" />
+
+      {/*
+        River first, so the road grid draws over it — that stacking order is
+        what produces the bridge below. The shoreline is the same path stroked
+        wider and drawn underneath, which keeps the two banks exactly parallel
+        without a second hand-built path to keep in sync.
+      */}
       <path
-        d="M-20 120 H640"
-        stroke="var(--illus-road)"
-        strokeWidth="12"
-        strokeLinecap="round"
+        d="M-20 340 C 70 352, 130 372, 178 404 C 226 436, 268 458, 300 482"
+        fill="none"
+        stroke="var(--illus-water-edge)"
+        strokeWidth="64"
+        strokeLinecap="butt"
       />
       <path
-        d="M-20 300 H640"
-        stroke="var(--illus-road)"
-        strokeWidth="18"
-        strokeLinecap="round"
+        d="M-20 340 C 70 352, 130 372, 178 404 C 226 436, 268 458, 300 482"
+        fill="none"
+        stroke="var(--illus-water)"
+        strokeWidth="56"
+        strokeLinecap="butt"
       />
-      <path
-        d="M140 -20 V500"
-        stroke="var(--illus-road)"
-        strokeWidth="12"
-        strokeLinecap="round"
-      />
-      <path
-        d="M420 -20 V500"
-        stroke="var(--illus-road)"
-        strokeWidth="16"
-        strokeLinecap="round"
-      />
-      <path
-        d="M-20 210 L200 210 L260 150 L640 150"
-        stroke="var(--illus-road)"
-        strokeWidth="9"
-        strokeLinecap="round"
-      />
-      <path
-        d="M300 500 L300 360 L500 360 L560 300"
-        stroke="var(--illus-road)"
-        strokeWidth="9"
-        strokeLinecap="round"
-      />
-      <path
-        d="M470 330 C520 330 560 360 590 410 C598 424 604 452 604 470 L470 470 Z"
+
+      {/* Park: a complete block bounded by the two main roads, not a clipped corner. */}
+      <rect
+        x="452"
+        y="322"
+        width="144"
+        height="116"
+        rx="10"
         fill="var(--illus-park)"
       />
+      {/* Footpath — drawn in the paper colour so it reads as a cut through the green. */}
       <path
-        d="M40 350 q60 -40 130 -20 q40 40 -10 90 q-90 20 -120 -70Z"
-        fill="var(--illus-water)"
+        d="M452 404 C 496 396, 512 356, 552 348 C 574 344, 588 336, 596 330"
+        fill="none"
+        stroke="var(--illus-paper)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        opacity="0.75"
       />
+      {/* Tree cover. Irregular on purpose — a grid of dots would read as a plaza. */}
+      <g fill="var(--illus-park-tree)">
+        <circle cx="474" cy="344" r="7" />
+        <circle cx="497" cy="360" r="5.5" />
+        <circle cx="472" cy="372" r="6" />
+        <circle cx="520" cy="340" r="6.5" />
+        <circle cx="546" cy="332" r="5" />
+        <circle cx="497" cy="420" r="6.5" />
+        <circle cx="524" cy="408" r="5.5" />
+        <circle cx="556" cy="416" r="7" />
+        <circle cx="578" cy="398" r="5" />
+        <circle cx="580" cy="360" r="6" />
+      </g>
+
+      {/* Road grid. White on a tinted base — roads are read by their form, not their fill. */}
+      <g stroke="var(--illus-road)" strokeLinecap="round" fill="none">
+        <path d="M-20 120 H640" strokeWidth="12" />
+        <path d="M-20 300 H640" strokeWidth="18" />
+        <path d="M140 -20 V500" strokeWidth="12" />
+        <path d="M420 -20 V500" strokeWidth="16" />
+        <path d="M-20 210 L200 210 L260 150 L640 150" strokeWidth="9" />
+        <path d="M300 500 L300 360 L452 360" strokeWidth="9" />
+      </g>
+
+      {/*
+        Bridge: the x=140 road crosses the river, so it gets abutment ticks on
+        both banks. A road that simply vanished under the blue would have left
+        the same ambiguity the old drawing had.
+      */}
+      <g stroke="var(--illus-route)" strokeWidth="3" strokeLinecap="round">
+        <path d="M126 348 L154 352" />
+        <path d="M126 404 L154 408" />
+      </g>
+
+      {/*
+        The donor→recipient match. Previously strokeWidth 2 with a "1 7" dash,
+        which was very nearly invisible; it is the only mark here that says
+        anything about the product, so it is now meant to be seen.
+      */}
       <path
         d="M214 214 C 270 250, 330 250, 372 300"
+        fill="none"
         stroke="var(--illus-route)"
-        strokeWidth="2"
-        strokeDasharray="1 7"
+        strokeWidth="2.5"
+        strokeDasharray="7 6"
         strokeLinecap="round"
       />
+
       <MapPin x={196} y={178} size="lg" color="var(--brand-amber)" />
       <MapPin x={354} y={264} size="lg" color="var(--brand)" halo />
       <MapPin x={96} y={236} size="sm" color="var(--brand)" />
       <MapPin x={470} y={120} size="sm" color="var(--brand-amber)" />
-      <MapPin x={300} y={380} size="sm" color="var(--brand)" />
+      <MapPin x={300} y={330} size="sm" color="var(--brand)" />
       <MapPin x={520} y={250} size="sm" color="var(--brand-amber)" />
-      <g transform="translate(32,384)">
-        <rect width="176" height="62" rx="12" fill="var(--illus-card)" />
+
+      <g transform="translate(32,32)">
+        <rect width="196" height="82" rx="12" fill="var(--illus-card)" />
         <rect
           x="0.5"
           y="0.5"
-          width="175"
-          height="61"
+          width="195"
+          height="81"
           rx="11.5"
           stroke="var(--illus-card-border)"
+          fill="none"
         />
         <circle cx="22" cy="22" r="6" fill="var(--brand-amber)" />
         <text
@@ -250,6 +311,22 @@ function MapIllustration({ className }: { className?: string }) {
           fill="var(--illus-ink)"
         >
           Recipients
+        </text>
+        <path
+          d="M14 62 H30"
+          stroke="var(--illus-route)"
+          strokeWidth="2.5"
+          strokeDasharray="7 6"
+          strokeLinecap="round"
+        />
+        <text
+          x="38"
+          y="67"
+          fontSize="13"
+          fontWeight="600"
+          fill="var(--illus-ink)"
+        >
+          A match nearby
         </text>
       </g>
     </svg>
@@ -305,22 +382,6 @@ function MapPin({
       <path d={d} fill={color} />
       <circle cx={r} cy={r} r={dotR} fill="var(--illus-pin-dot)" />
     </g>
-  );
-}
-
-function BrandMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 28 28"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-    >
-      <path
-        d="M14 1.5c-4.7 0-8.5 3.8-8.5 8.5 0 6 7.4 14.7 8 15.4a.7.7 0 0 0 1 0c.6-.7 8-9.4 8-15.4 0-4.7-3.8-8.5-8.5-8.5Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
 

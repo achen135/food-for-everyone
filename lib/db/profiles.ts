@@ -2,17 +2,17 @@ import "server-only";
 
 import type { User } from "@supabase/supabase-js";
 
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import { createClient } from "@/lib/supabase/server";
 import { tracked } from "@/lib/db/instrument";
 import type { Profile } from "@/lib/db/types";
 
 /** The current user's profile, or null if not signed in / no row yet. */
 export async function getMyProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const { data, error } = await tracked("profiles.selectByAuthUser", () =>
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),

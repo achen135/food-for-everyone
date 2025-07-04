@@ -8,7 +8,7 @@ import {
   rateLimitHeaders,
   rateLimitingEnabled,
 } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import { parseOrgsQuery } from "@/lib/validation/map";
 
 const NO_STORE = { "Cache-Control": "no-store" } as const;
@@ -31,10 +31,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * without touching the query logic.
  */
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     return NextResponse.json(

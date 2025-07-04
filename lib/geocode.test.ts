@@ -1,8 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+// Identity, so the pacer wiring underneath is observable. The cache's own
+// behaviour is Next's to test; what matters here is what it wraps.
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}));
+
 import { fetchGeocodeResults, geocodeAddress } from "@/lib/geocode";
+import { OutboundPaceSaturatedError, nominatimPacer } from "@/lib/pace";
 
 const sample = [
   {
@@ -88,5 +95,51 @@ describe("geocodeAddress", () => {
     await expect(geocodeAddress("ab")).resolves.toEqual([]);
     expect(fetchFn).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("geocodeAddress outbound pacing", () => {
+  beforeEach(() => {
+    nominatimPacer.reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    nominatimPacer.reset();
+  });
+
+  it("routes a cache miss through the process-global pacer", async () => {
+    // The regression this guards: `unstable_cache` alone is not a throttle.
+    // Distinct queries miss every time, which is exactly what a user typing
+    // new addresses produces, so the pacer has to sit on the miss path.
+    mockFetch(sample);
+    const run = vi.spyOn(nominatimPacer, "run");
+
+    await geocodeAddress("Springfield");
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not pace a query that never reaches the network", async () => {
+    mockFetch(sample);
+    const run = vi.spyOn(nominatimPacer, "run");
+
+    await geocodeAddress("ab");
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("propagates saturation instead of returning an empty list", async () => {
+    mockFetch(sample);
+    vi.spyOn(nominatimPacer, "run").mockRejectedValue(
+      new OutboundPaceSaturatedError(4000),
+    );
+
+    // Callers distinguish this from a real "nothing found"; collapsing it into
+    // `[]` here would make that impossible upstream.
+    await expect(geocodeAddress("Springfield")).rejects.toBeInstanceOf(
+      OutboundPaceSaturatedError,
+    );
   });
 });

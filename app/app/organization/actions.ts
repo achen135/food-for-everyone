@@ -10,7 +10,9 @@ import {
   upsertMyOrganization,
 } from "@/lib/db";
 import { geocodeAddress, type GeocodeResult } from "@/lib/geocode";
-import { createClient } from "@/lib/supabase/server";
+import { OutboundPaceSaturatedError } from "@/lib/pace";
+import { geocodeLimiter, rateLimitingEnabled } from "@/lib/rate-limit";
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import {
   geocodeQuerySchema,
   needsFreshGeocode,
@@ -18,21 +20,32 @@ import {
 } from "@/lib/validation/organization";
 
 async function currentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
   return user?.id ?? null;
 }
 
 export type SearchAddressResult =
   { ok: true; results: GeocodeResult[] } | { ok: false; message: string };
 
-/** Search-triggered geocoding — invoked by the "Search address" button only. */
+/**
+ * Search-triggered geocoding — invoked by the "Search address" button only.
+ *
+ * Throttled twice over, because one mechanism cannot do both jobs (M9; see
+ * lib/pace.ts for the full reasoning):
+ *
+ *   - `geocodeLimiter`, here, caps what a single account can spend;
+ *   - `nominatimPacer`, inside `geocodeAddress`, caps what the whole process
+ *     puts on the wire, which is what Nominatim's policy actually measures.
+ *
+ * Each of the three failure paths below says something different and true. None
+ * of them returns an empty result list: "no results" is a claim about the
+ * *address*, and we are not entitled to make it when the reason is us.
+ */
 export async function searchAddressAction(
   query: string,
 ): Promise<SearchAddressResult> {
-  if (!(await currentUserId())) {
+  const userId = await currentUserId();
+  if (!userId) {
     return { ok: false, message: "Your session expired. Sign in again." };
   }
 
@@ -45,9 +58,32 @@ export async function searchAddressAction(
     };
   }
 
+  // Charged after validation, not before: a query zod rejects never reaches
+  // Nominatim, so it should not cost the user any of a budget that exists to
+  // ration outbound calls. (This is the opposite order from /api/orgs, where
+  // the limiter runs first because every well-formed *and* malformed request
+  // there costs the same server work.)
+  const decision = geocodeLimiter.check(userId);
+  if (rateLimitingEnabled() && !decision.allowed) {
+    const seconds = Math.max(1, Math.ceil(decision.retryAfterMs / 1000));
+    return {
+      ok: false,
+      message: `Too many address searches. Try again in ${seconds}s.`,
+    };
+  }
+
   try {
     return { ok: true, results: await geocodeAddress(parsed.data.q) };
-  } catch {
+  } catch (error) {
+    if (error instanceof OutboundPaceSaturatedError) {
+      // We declined to ask, and the user is entitled to know that is what
+      // happened rather than being told their address does not exist.
+      return {
+        ok: false,
+        message:
+          "Address lookup is busy right now. Try again in a few seconds.",
+      };
+    }
     return {
       ok: false,
       message:

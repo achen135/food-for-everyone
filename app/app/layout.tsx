@@ -4,16 +4,13 @@ import { redirect } from "next/navigation";
 import { InfoIcon } from "lucide-react";
 
 import { getOrCreateProfile } from "@/lib/db";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import { signOut } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   // Middleware already gates /app; this is the defense-in-depth server check and
   // also where we guarantee a profile row exists.

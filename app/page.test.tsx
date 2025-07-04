@@ -41,4 +41,28 @@ describe("Home (landing page)", () => {
       expect(document.getElementById(id)).not.toBeNull();
     }
   });
+
+  /*
+   * M9 rebuilt the illustration because two of its shapes were unreadable — a
+   * viewBox-clipped wedge for a park, a floating blob for water. The drawing
+   * itself can only be judged by looking at it, but the label is the part a
+   * screen-reader user gets *instead* of looking, so it must keep describing
+   * what is actually on the canvas.
+   */
+  it("describes the illustration by what it now draws", () => {
+    render(<Home />);
+
+    const illustration = screen.getByRole("img", { name: /city map/i });
+    const label = illustration.getAttribute("aria-label") ?? "";
+
+    for (const feature of [
+      /river/i,
+      /bridge/i,
+      /park/i,
+      /donor/i,
+      /recipient/i,
+    ]) {
+      expect(label).toMatch(feature);
+    }
+  });
 });

@@ -2,6 +2,8 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
+import { nominatimPacer } from "@/lib/pace";
+
 /**
  * Address → coordinates via OpenStreetMap Nominatim.
  *
@@ -11,10 +13,27 @@ import { unstable_cache } from "next/cache";
  *   - identify the app with a real User-Agent;
  *   - cache results — every lookup goes through `unstable_cache` below, so a
  *     repeated query never re-hits Nominatim;
- *   - ≤ 1 request/second — search-triggered + cached keeps portfolio traffic far
- *     under this without an explicit throttle.
+ *   - ≤ 1 request/second, **application-wide** — enforced by `nominatimPacer`
+ *     (M9). See below for why that is a separate mechanism from the per-user
+ *     limiter in the Server Action.
  * Fallback if limits ever bite: Photon (komoot), then self-hosted — see
  * docs/Design Decisions.md.
+ *
+ * ## Three layers, doing three different jobs
+ *
+ * Until M9 this module had only the first, and Spec §10 carried the gap from M3
+ * onward: a signed-in user could drive uncached lookups as fast as they could
+ * click, and the ban would land on our egress IP rather than on them.
+ *
+ *  1. **`unstable_cache`** — absorbs *repeated* queries. It is not a throttle:
+ *     a user typing new addresses produces a stream of distinct keys, every one
+ *     of which is a miss, so this layer alone leaves the policy unguarded.
+ *  2. **`geocodeLimiter`** (per user, in `searchAddressAction`) — stops one
+ *     account monopolising the shared budget. It cannot enforce the policy,
+ *     because the policy is not per user.
+ *  3. **`nominatimPacer`** (process-global, here) — the only layer that
+ *     actually enforces "1 req/s at our egress IP". Applied *inside* the cache
+ *     so a cache hit costs no pace, which is what keeps the common path fast.
  *
  * The Postgres-backed read-through cache is deliberately NOT built here; that is
  * an M7 deliverable (Spec §9). `unstable_cache` is the interim store.
@@ -85,16 +104,27 @@ export async function fetchGeocodeResults(
     );
 }
 
+/**
+ * Cache miss → pace, then fetch. The pacer sits *inside* `unstable_cache` on
+ * purpose: a cached answer puts nothing on the wire, so charging it a slot
+ * would throttle requests that were never going to reach Nominatim.
+ */
 const cachedGeocode = unstable_cache(
-  (query: string) => fetchGeocodeResults(query),
+  (query: string) => nominatimPacer.run(() => fetchGeocodeResults(query)),
   ["geocode-search-v1"],
   { revalidate: CACHE_TTL_SECONDS, tags: ["geocode"] },
 );
 
 /**
  * Geocode an address string to a short list of candidate matches. Returns `[]`
- * for a too-short query. Throws if Nominatim is unreachable / errors — the
- * caller turns that into a user-facing message.
+ * for a too-short query.
+ *
+ * Throws if Nominatim is unreachable or errors, and throws
+ * `OutboundPaceSaturatedError` when the process-wide pace is booked further out
+ * than callers are made to wait. Those are different situations and the caller
+ * must not collapse them into one message — in particular, neither is "no
+ * results found". The address may well exist; we either could not ask, or
+ * declined to ask yet.
  */
 export async function geocodeAddress(query: string): Promise<GeocodeResult[]> {
   const normalized = normalizeQuery(query);

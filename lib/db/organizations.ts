@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import { createClient } from "@/lib/supabase/server";
 import { tracked } from "@/lib/db/instrument";
 import { appCache, cacheKey, cachingEnabled } from "@/lib/cache";
@@ -51,11 +52,10 @@ const NEAR_TTL = { ttlMs: 20_000, staleMs: 40_000 };
 
 /** The caller's organization, or null if they haven't created one. */
 export async function getMyOrganization(): Promise<Organization | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
   if (!user) return null;
+
+  const supabase = await createClient();
 
   const read = async () => {
     const { data, error } = await tracked("organizations.selectByOwner", () =>

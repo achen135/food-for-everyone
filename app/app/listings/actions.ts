@@ -10,7 +10,7 @@ import {
   createListing,
   releaseClaim,
 } from "@/lib/db";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/auth/user";
 import {
   listingSchema,
   messageForCode,
@@ -24,10 +24,7 @@ export type ListingResult =
 const idSchema = z.uuid("Unknown listing");
 
 async function requireSession(): Promise<boolean> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
   return Boolean(user);
 }
 

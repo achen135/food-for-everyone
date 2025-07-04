@@ -129,12 +129,30 @@
    * rather than UI, so its colours live here as their own tokens instead of
    * being borrowed from the semantic set — that keeps the map legible in both
    * themes without dragging component colours around to suit a picture.
+   *
+   * Re-selected in M9 through the same validator M8 used for the charts. The
+   * previous values were not merely subtle, they were indistinguishable: park
+   * and road measured ΔE 1.9 apart under normal vision against a floor of 15,
+   * so the park was the same colour as the streets crossing it. The regions
+   * now clear that floor pairwise — paper/park/water worst pair ΔE 17.0 normal,
+   * 16.0 protanopia. `--illus-park` is the Spec §8 sage `--brand-support`
+   * unchanged; the water had to deepen to earn the separation, which is why it
+   * is more saturated than the rest of this page.
+   *
+   * Roads are white-on-tint, as on a real map: they read by their form — a long
+   * thin grid — not by their fill, so they are exempt from the pairwise check
+   * that the regions must pass. Tree, shoreline and bridge marks sit below 3:1
+   * against the region they decorate by design; they are texture inside a shape
+   * that has already been identified, and the shape plus the legend is the
+   * relief the validator asks for.
    */
-  --illus-paper: #eff4ec;
-  --illus-road: #dce6d6;
-  --illus-park: #dbebcf;
-  --illus-water: #d6e7ec;
-  --illus-route: #93a29a;
+  --illus-paper: #edf3e9;
+  --illus-road: #ffffff;
+  --illus-park: #8db580;
+  --illus-park-tree: #1f6e43;
+  --illus-water: #4593bd;
+  --illus-water-edge: #2b6f96;
+  --illus-route: #4f6257; /* 3:1+ on the paper — the old #93a29a was 2.4 */
   --illus-card: #ffffff;
   --illus-card-border: #e4e7e2;
   --illus-ink: #1a2b22;
@@ -193,12 +211,23 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Same drawing, night-time palette — see the light block for why. */
-  --illus-paper: #172019;
-  --illus-road: #24312a;
-  --illus-park: #1e2c22;
-  --illus-water: #1b2a2e;
-  --illus-route: #5d6d64;
+  /*
+   * Same drawing, night-time palette — see the light block for why.
+   *
+   * Selected against the dark surface rather than derived from the light
+   * values, the rule M8 established for the charts: the light park and water
+   * simply darkened would land back where they started, since the old dark pair
+   * measured ΔE 2.3 apart. These come out at ΔE 18.4 normal / 17.8 protanopia,
+   * and here both regions also clear 3:1 against the paper, which the light
+   * mode's park does not.
+   */
+  --illus-paper: #161e18;
+  --illus-road: #26332b;
+  --illus-park: #5f8a4e;
+  --illus-park-tree: #9cc487;
+  --illus-water: #2c6ea6;
+  --illus-water-edge: #6ea9d8;
+  --illus-route: #93a99b;
   --illus-card: #1a241e;
   --illus-card-border: #2c3a32;
   --illus-ink: #e8ece8;
