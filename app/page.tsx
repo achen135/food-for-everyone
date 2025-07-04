@@ -169,10 +169,10 @@ function Hero() {
  *     reads as water rather than as a puddle;
  *   - a road bridges it, which is a thing that only happens over water;
  *   - the park is a whole road-bounded block with tree cover and a footpath,
- *     rather than a corner the frame happens to cut off;
- *   - the donor→recipient match line is now thick enough to notice, and is the
- *     one element that illustrates what the product actually does — so it gets
- *     a legend entry, while the park and water are expected to carry themselves.
+ *     rather than a corner the frame happens to cut off.
+ *
+ * The park and water are expected to carry themselves without a caption, so the
+ * legend only names the two kinds of pin.
  *
  * Colours are validated, not chosen — see docs/Design Decisions.md. This must
  * stay recognisably an illustration; it is not meant to pass for a screenshot.
@@ -182,7 +182,7 @@ function MapIllustration({ className }: { className?: string }) {
     <svg
       viewBox="0 0 620 462"
       role="img"
-      aria-label="Illustration of a city map: a river crossed by a bridge, a park with trees, and pins marking food donors and recipients, with a dashed line linking one donor to a nearby recipient."
+      aria-label="Illustration of a city map: a river crossed by a bridge, a park with trees, and pins marking food donors and recipients."
       className={className}
     >
       <rect width="620" height="462" fill="var(--illus-paper)" />
@@ -260,20 +260,6 @@ function MapIllustration({ className }: { className?: string }) {
         <path d="M126 404 L154 408" />
       </g>
 
-      {/*
-        The donor→recipient match. Previously strokeWidth 2 with a "1 7" dash,
-        which was very nearly invisible; it is the only mark here that says
-        anything about the product, so it is now meant to be seen.
-      */}
-      <path
-        d="M214 214 C 270 250, 330 250, 372 300"
-        fill="none"
-        stroke="var(--illus-route)"
-        strokeWidth="2.5"
-        strokeDasharray="7 6"
-        strokeLinecap="round"
-      />
-
       <MapPin x={196} y={178} size="lg" color="var(--brand-amber)" />
       <MapPin x={354} y={264} size="lg" color="var(--brand)" halo />
       <MapPin x={96} y={236} size="sm" color="var(--brand)" />
@@ -282,12 +268,12 @@ function MapIllustration({ className }: { className?: string }) {
       <MapPin x={520} y={250} size="sm" color="var(--brand-amber)" />
 
       <g transform="translate(32,32)">
-        <rect width="196" height="82" rx="12" fill="var(--illus-card)" />
+        <rect width="196" height="62" rx="12" fill="var(--illus-card)" />
         <rect
           x="0.5"
           y="0.5"
           width="195"
-          height="81"
+          height="61"
           rx="11.5"
           stroke="var(--illus-card-border)"
           fill="none"
@@ -311,22 +297,6 @@ function MapIllustration({ className }: { className?: string }) {
           fill="var(--illus-ink)"
         >
           Recipients
-        </text>
-        <path
-          d="M14 62 H30"
-          stroke="var(--illus-route)"
-          strokeWidth="2.5"
-          strokeDasharray="7 6"
-          strokeLinecap="round"
-        />
-        <text
-          x="38"
-          y="67"
-          fontSize="13"
-          fontWeight="600"
-          fill="var(--illus-ink)"
-        >
-          A match nearby
         </text>
       </g>
     </svg>
