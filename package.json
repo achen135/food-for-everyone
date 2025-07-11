@@ -19,6 +19,7 @@
     "db:seed": "node --experimental-strip-types supabase/seed/run.ts",
     "db:seed:local": "node scripts/with-local-supabase.mjs node --experimental-strip-types supabase/seed/run.ts",
     "db:reset:local": "supabase db reset",
+    "db:test:events": "node scripts/with-local-supabase.mjs node --experimental-strip-types supabase/tests/events.ts",
     "db:push": "supabase db push",
     "maplibre:worker": "node scripts/copy-maplibre-worker.mjs",
     "predev": "node scripts/copy-maplibre-worker.mjs",
