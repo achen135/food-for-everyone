@@ -1,0 +1,57 @@
+# Local infrastructure for the ml subsystem (docs/ML Subsystem.md §3).
+#
+# The Next app is NOT here. It runs on Vercel and, locally, on `npm run dev`
+# against Supabase's own containers, which the Supabase CLI manages. This file
+# is only the ml corpus database and the ml service that reads it.
+#
+# ## The port matters
+#
+# Postgres is published on 55432, not 5432 and not 54322. 5432 would collide
+# with any system Postgres; 54322 is local Supabase, which is a *different*
+# database holding the product's own data and is frequently up at the same time
+# (`npx supabase start`). Getting those two confused would mean generating a
+# 300k-row synthetic corpus into the product database, so they are kept
+# visibly distinct — see the header of `ml/src/ml/db.py`.
+#
+#   docker compose up -d postgres      # just the database, for `make data`
+#   docker compose run --rm ml bash    # a shell with the package installed
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ffe_ml_postgres
+    environment:
+      POSTGRES_USER: ffe_ml
+      POSTGRES_PASSWORD: ffe_ml
+      POSTGRES_DB: ffe_ml
+    ports:
+      - "55432:5432"
+    volumes:
+      - ml_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `make data` runs straight after `docker compose up -d`, and Postgres
+      # accepts TCP connections for a second or two before it will accept
+      # queries. Without this the first run of a clean checkout fails.
+      test: ["CMD-SHELL", "pg_isready -U ffe_ml -d ffe_ml"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ml:
+    build:
+      context: ./ml
+    container_name: ffe_ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Inside the compose network the host is the service name, not localhost.
+      ML_DATABASE_URL: postgresql://ffe_ml:ffe_ml@postgres:5432/ffe_ml
+    volumes:
+      - ./ml:/app
+    # Fleshed out in M13, when this becomes the FastAPI scoring service. For now
+    # it is a shell you can run the pipeline in.
+    command: ["sleep", "infinity"]
+
+volumes:
+  ml_pgdata:

@@ -71,3 +71,16 @@ CLAUDE.md
 # and the benchmark protocol writes it into that now-tracked directory.
 /docs/benchmarks/.session.json
 /docs/benchmarks/*.session.json
+
+# ml subsystem (Python). The venv and generated corpus are local artefacts; the
+# corpus is regenerated from a seed by `make data`, so committing it would add
+# ~300k rows of noise to every diff for no reproducibility gain — the seed and
+# the committed stream hash are what make it reproducible.
+/ml/.venv/
+/ml/out/
+/ml/src/*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

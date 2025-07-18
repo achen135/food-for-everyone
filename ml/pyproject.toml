@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ffe-ml"
+version = "0.1.0"
+description = "Food For Everyone — ML subsystem: event-log corpus, feature pipeline, waste-risk model."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# Kept deliberately short. The simulator itself needs no third-party maths at
+# all — `random.Random` is used precisely because CPython guarantees its stream
+# across versions, which numpy's default generator does not promise in the same
+# terms. psycopg is the only runtime dependency M11 adds.
+dependencies = [
+  "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+ffe-simulate = "ml.simulate.__main__:main"
+
+# src layout: the import package is `ml`, so `python -m ml.simulate` works
+# exactly as the milestone brief specifies. The extra directory level is what
+# keeps the repo root off sys.path during tests — without it, a stray
+# `import ml` could resolve against the source tree rather than the installed
+# package and mask a packaging error.
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ml*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "postgres: needs a live corpus database (ML_DATABASE_URL); skipped otherwise",
+  "slow: full-scale generation; skipped unless ML_RUN_SLOW=1",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "C4", "RUF"]
+ignore = [
+  # Assertions in the engine are internal invariants, not input validation.
+  "B011",
+  # Every doc in this repo — CLAUDE.md, docs/*.md, the SQL migrations — is
+  # written with typographic dashes. Flagging en dashes in prose would either
+  # make the ml/ comments read differently from everything around them or bury
+  # the real findings under punctuation noise.
+  "RUF002",
+  "RUF003",
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+# psycopg ships types, but the COPY cursor is duck-typed through `object` in
+# the sink so a JSONL-only run never imports it. That indirection is the reason
+# for the handful of `type: ignore`s there rather than a blanket relaxation.
+warn_unreachable = true

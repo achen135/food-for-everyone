@@ -54,3 +54,61 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  # The ml subsystem (docs/ML Subsystem.md). Separate job rather than steps in
+  # `verify`: it is a different language with a different toolchain, and a
+  # Python failure should read as a Python failure rather than as "CI is red".
+  ml:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+
+    services:
+      # The corpus database. `ml/sql/` is plain DDL that nothing else in the
+      # pipeline parses, so without a real Postgres here a syntax error in it
+      # would ship — and the COPY path has already broken once in a way only an
+      # actual server could show (see ml/tests/test_postgres.py).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ffe_ml
+          POSTGRES_PASSWORD: ffe_ml
+          POSTGRES_DB: ffe_ml
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ffe_ml -d ffe_ml"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ML_DATABASE_URL: postgresql://ffe_ml:ffe_ml@localhost:5432/ffe_ml
+      ML_TEST_POSTGRES: "1"
+      # The >=100k listing events / >=6 simulated months floor in §5 is a
+      # definition-of-done item, so it is enforced here rather than trusted.
+      # The full-scale run costs about half a minute.
+      ML_RUN_SLOW: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml/pyproject.toml
+
+      - run: pip install -e ".[dev]"
+
+      - name: Ruff
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+
+      - name: Mypy
+        run: mypy
+
+      - name: Pytest
+        run: pytest
