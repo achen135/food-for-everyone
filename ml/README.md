@@ -29,20 +29,51 @@ Needs Python 3.12+ and Docker (for the corpus Postgres).
 
 ```bash
 cd ml
-make data      # start Postgres, install, generate ~309k events (~25 s)
+make reproduce # data -> features -> baselines, from nothing (~25 s total)
 make check     # ruff + mypy + pytest
 ```
 
-`make data` is idempotent: it truncates `events` and regenerates from the seed,
-so it always produces exactly the corpus documented in `docs/simulator.md`.
+`make reproduce` is `make data && make features && make eval-baselines`, and it
+regenerates `baselines.json` **byte-identically** from an empty database. Each
+step is idempotent: `data` truncates `events` and replays the seed, `features`
+truncates `features_waste` and recomputes it.
 
 ```
 make help      # every target
-make jsonl     # reference stream to out/events.jsonl
+make data      # ~309k events into Postgres
+make features  # ~438k point-in-time observations into features_waste
+make eval-baselines   # rewrite baselines.json
+make jsonl     # reference event stream to out/events.jsonl
 make hash      # stream sha256 — the determinism check
 make psql      # a shell on the corpus database
 make db-reset  # after editing ml/sql/
+make test-pg   # tests that need the corpus database
+make test-slow # tests including the full-scale volume run
 ```
+
+## What the numbers currently are
+
+Committed in [`baselines.json`](baselines.json), on the default seed. **Simulated
+data** — see [`docs/simulator.md`](docs/simulator.md) for what the generator
+assumes and therefore what these can and cannot mean.
+
+|        | events  | listings | observations     |
+| ------ | ------- | -------- | ---------------- |
+| corpus | 309,069 | 113,149  | 438,093 labelled |
+
+| baseline                | test PR-AUC | test ROC-AUC | lift over base |
+| ----------------------- | ----------- | ------------ | -------------- |
+| hours to `pickup_end`   | 0.766       | 0.790        | 1.68x          |
+| recipients within 15 km | 0.636       | 0.671        | 1.39x          |
+
+Base rate 0.457, so PR-AUC is always quoted beside it. That base rate is
+**per observation, not per listing**: 24.8% of listings are wasted, but wasted
+listings stay open longer and so contribute more hourly observations. Both
+numbers are real and they answer different questions — see Design Decisions.
+
+M13's model has to beat both of these on the untouched test split. Those test
+numbers were computed once, here, before any model existed, which is what stops
+the bar moving later; `k` was chosen on validation only.
 
 ## Layout
 
@@ -54,19 +85,47 @@ ml/
 ├── sql/
 │   ├── 001_events.sql   MIRRORS a real migration — see the sync obligation below
 │   └── 002_ml_tables.sql features_waste, predictions, listing_risk, metric_history
+├── baselines.json       the committed bar M13 has to beat
 ├── src/ml/
 │   ├── events.py        the payload contract, in code
 │   ├── db.py            connection, bootstrap, truncate
-│   └── simulate/        the generative model
-│       ├── config.py    every tunable, all-constants-no-logic
-│       ├── geo.py       Chicago-metro clusters, haversine
-│       ├── orgs.py      latent traits (the documented cap)
-│       ├── engine.py    the discrete-event behavioural model
-│       ├── sink.py      JSONL and Postgres (COPY) outputs
-│       └── rng.py       determinism plumbing
-├── tests/               determinism, contract conformance, volume
+│   ├── simulate/        the generative model                          [M11]
+│   │   ├── config.py    every tunable, all-constants-no-logic
+│   │   ├── geo.py       Chicago-metro clusters, haversine
+│   │   ├── orgs.py      latent traits (the documented cap)
+│   │   ├── engine.py    the discrete-event behavioural model
+│   │   ├── sink.py      JSONL and Postgres (COPY) outputs
+│   │   └── rng.py       determinism plumbing
+│   ├── features/        point-in-time features and the label          [M12]
+│   │   ├── spec.py      the feature contract: names, types, radii
+│   │   ├── reference.py the SPECIFICATION — slow, obvious, filtered once
+│   │   ├── pipeline.py  the streaming forward pass that actually runs
+│   │   ├── geo_index.py incremental spatial counters
+│   │   ├── labels.py    the derived label, in its own pass
+│   │   ├── text.py      quantity and category from free text
+│   │   └── writer.py    features_waste in and out
+│   ├── baselines/       the two rules baselines                       [M12]
+│   └── eval/            splits, metrics, harness                      [M12]
+├── tests/               determinism, contract, volume, LEAKAGE, splits
 └── docs/simulator.md    what the generator assumes, and what that costs
 ```
+
+## The leakage guard
+
+`tests/test_leakage.py` is the correctness check this milestone is built around.
+A leaked feature does not crash — it produces a model that scores beautifully
+offline and collapses in production. So there are two implementations of the
+feature computation, sharing no code below `spec.py`:
+
+- `reference.py` filters the log to `occurred_at <= as_of` at the top of one
+  function, and is otherwise as obvious as possible. It is the specification.
+- `pipeline.py` walks the log forward holding incremental state, and cannot
+  express the leak: events after `as_of` have not been read yet.
+
+The guard asserts they agree, that the reference produces identical values from
+the whole log and from a prefix of it, and that re-running the pipeline over a
+truncated log reproduces the rows it already emitted. It found all three of the
+real bugs in this milestone.
 
 The import package is `ml` under `src/`, so `python -m ml.simulate` works and a
 stray `import ml` cannot silently resolve against the source tree instead of

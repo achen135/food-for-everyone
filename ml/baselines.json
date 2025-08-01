@@ -1,0 +1,382 @@
+{
+  "baselines": {
+    "recipient_scarcity": {
+      "metrics": {
+        "test": {
+          "at_recall_target": {
+            "precision": 0.498506,
+            "reachable": true,
+            "recall": 0.805384,
+            "recall_target": 0.8,
+            "threshold": -322.0
+          },
+          "base_rate": 0.456493,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.392427,
+          "n": 87561,
+          "n_positive": 39971,
+          "pr_auc": 0.635634,
+          "reliability": [],
+          "roc_auc": 0.671259
+        },
+        "train": {
+          "at_recall_target": {
+            "precision": 0.515411,
+            "reachable": true,
+            "recall": 0.800615,
+            "recall_target": 0.8,
+            "threshold": -318.0
+          },
+          "base_rate": 0.47152,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.377845,
+          "n": 263482,
+          "n_positive": 124237,
+          "pr_auc": 0.649681,
+          "reliability": [],
+          "roc_auc": 0.671904
+        },
+        "val": {
+          "at_recall_target": {
+            "precision": 0.511909,
+            "reachable": true,
+            "recall": 0.803624,
+            "recall_target": 0.8,
+            "threshold": -321.0
+          },
+          "base_rate": 0.46085,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.412557,
+          "n": 87050,
+          "n_positive": 40117,
+          "pr_auc": 0.650977,
+          "reliability": [],
+          "roc_auc": 0.678844
+        }
+      },
+      "name": "Recipients within 15 km",
+      "notes": "Recipient geography as-of is a PROXY, and a lossy one. The event log has no organization-registration event, so a recipient becomes visible to the pipeline only once it has claimed something \u2014 it can sit two kilometres away, fully registered and reachable in the product, and be invisible here until its first claim. The count is therefore biased low, and most severely at the start of the corpus, when almost nothing has been claimed yet. MEASURED CONSEQUENCE: the brief's literal predicate, `recipients_within_15km == 0`, fires on 172 of 438,093 observations (0.04%), and the waste rate among them is 31.4% \u2014 BELOW the 45.7% base rate. As written, the rule is worse than guessing, and it is worse for a structural reason rather than a tuning one: a zero count means 'nothing has been claimed near here yet', which early in the corpus mostly means 'it is early', not 'this donor is isolated'. The graded version is a real signal \u2014 1-5 recipients nearby carries a 76.2% waste rate against 34.0% at 151+ \u2014 which is why the sweep covers k > 0 and why the reported operating point is not k = 0. Any model using this feature would improve immediately if FFE emitted an org-registration event; that is the cleanest argument this subsystem has for adding one.",
+      "operating_point": {
+        "basis": "no k reaches recall >= 0.8 without firing on more than 90% of observations; reporting the highest-recall k that still discriminates",
+        "chosen_on": "val",
+        "k": 250.0,
+        "max_fire_rate": 0.9,
+        "recall_target_reachable": false,
+        "sweep": [
+          {
+            "fire_rate": 0.0,
+            "fires_on": 0,
+            "k": 0.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          {
+            "fire_rate": 0.0,
+            "fires_on": 0,
+            "k": 1.0,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          {
+            "fire_rate": 0.024411,
+            "fires_on": 2125,
+            "k": 2.0,
+            "precision": 0.672471,
+            "recall": 0.035621
+          },
+          {
+            "fire_rate": 0.024411,
+            "fires_on": 2125,
+            "k": 3.0,
+            "precision": 0.672471,
+            "recall": 0.035621
+          },
+          {
+            "fire_rate": 0.136531,
+            "fires_on": 11885,
+            "k": 5.0,
+            "precision": 0.778797,
+            "recall": 0.230725
+          },
+          {
+            "fire_rate": 0.196944,
+            "fires_on": 17144,
+            "k": 8.0,
+            "precision": 0.764116,
+            "recall": 0.326545
+          },
+          {
+            "fire_rate": 0.277909,
+            "fires_on": 24192,
+            "k": 12.0,
+            "precision": 0.743676,
+            "recall": 0.448463
+          },
+          {
+            "fire_rate": 0.335876,
+            "fires_on": 29238,
+            "k": 20.0,
+            "precision": 0.711882,
+            "recall": 0.518832
+          },
+          {
+            "fire_rate": 0.335876,
+            "fires_on": 29238,
+            "k": 40.0,
+            "precision": 0.711882,
+            "recall": 0.518832
+          },
+          {
+            "fire_rate": 0.346272,
+            "fires_on": 30143,
+            "k": 80.0,
+            "precision": 0.700494,
+            "recall": 0.526335
+          },
+          {
+            "fire_rate": 0.408708,
+            "fires_on": 35578,
+            "k": 150.0,
+            "precision": 0.64478,
+            "recall": 0.571827
+          },
+          {
+            "fire_rate": 0.502872,
+            "fires_on": 43775,
+            "k": 250.0,
+            "precision": 0.583735,
+            "recall": 0.636962
+          },
+          {
+            "fire_rate": 0.992039,
+            "fires_on": 86357,
+            "k": 350.0,
+            "precision": 0.462093,
+            "recall": 0.994715
+          }
+        ],
+        "sweep_feature": "recipients_within_15km",
+        "sweep_label": "k recipients",
+        "val_fire_rate": 0.502872,
+        "val_precision": 0.583735,
+        "val_recall": 0.636962
+      },
+      "rule": "predict wasted when recipients_within_15km <= k (k = 0 is the brief's rule)"
+    },
+    "time_pressure": {
+      "metrics": {
+        "test": {
+          "at_recall_target": {
+            "precision": 0.635039,
+            "reachable": true,
+            "recall": 0.80003,
+            "recall_target": 0.8,
+            "threshold": -7.136316
+          },
+          "base_rate": 0.456493,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.678093,
+          "n": 87561,
+          "n_positive": 39971,
+          "pr_auc": 0.766038,
+          "reliability": [],
+          "roc_auc": 0.79003
+        },
+        "train": {
+          "at_recall_target": {
+            "precision": 0.65343,
+            "reachable": true,
+            "recall": 0.800003,
+            "recall_target": 0.8,
+            "threshold": -7.077175
+          },
+          "base_rate": 0.47152,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.653487,
+          "n": 263482,
+          "n_positive": 124237,
+          "pr_auc": 0.779652,
+          "reliability": [],
+          "roc_auc": 0.794527
+        },
+        "val": {
+          "at_recall_target": {
+            "precision": 0.640865,
+            "reachable": true,
+            "recall": 0.800135,
+            "recall_target": 0.8,
+            "threshold": -7.100705
+          },
+          "base_rate": 0.46085,
+          "brier": null,
+          "calibrated_scale": false,
+          "lift_over_base": 1.673503,
+          "n": 87050,
+          "n_positive": 40117,
+          "pr_auc": 0.771234,
+          "reliability": [],
+          "roc_auc": 0.79191
+        }
+      },
+      "name": "Hours to pickup_end",
+      "notes": "The obvious rule, and a genuinely strong one: a listing minutes from its deadline with nobody holding it is usually lost. What it cannot see is that the same number of hours means different things at different times of day \u2014 four hours at 09:00 is plenty and four hours at 03:00 is nothing, because recipients are shut.",
+      "operating_point": {
+        "basis": "highest precision among k reaching recall >= 0.8",
+        "chosen_on": "val",
+        "k": 8.0,
+        "max_fire_rate": 0.9,
+        "recall_target_reachable": true,
+        "sweep": [
+          {
+            "fire_rate": 0.034337,
+            "fires_on": 2989,
+            "k": 0.5,
+            "precision": 0.960856,
+            "recall": 0.071591
+          },
+          {
+            "fire_rate": 0.069604,
+            "fires_on": 6059,
+            "k": 1.0,
+            "precision": 0.931837,
+            "recall": 0.140738
+          },
+          {
+            "fire_rate": 0.105882,
+            "fires_on": 9217,
+            "k": 1.5,
+            "precision": 0.905609,
+            "recall": 0.208066
+          },
+          {
+            "fire_rate": 0.143779,
+            "fires_on": 12516,
+            "k": 2.0,
+            "precision": 0.879914,
+            "recall": 0.274522
+          },
+          {
+            "fire_rate": 0.225422,
+            "fires_on": 19623,
+            "k": 3.0,
+            "precision": 0.823829,
+            "recall": 0.402971
+          },
+          {
+            "fire_rate": 0.313487,
+            "fires_on": 27289,
+            "k": 4.0,
+            "precision": 0.767965,
+            "recall": 0.522397
+          },
+          {
+            "fire_rate": 0.490132,
+            "fires_on": 42666,
+            "k": 6.0,
+            "precision": 0.676886,
+            "recall": 0.719894
+          },
+          {
+            "fire_rate": 0.636163,
+            "fires_on": 55378,
+            "k": 8.0,
+            "precision": 0.615894,
+            "recall": 0.850188
+          },
+          {
+            "fire_rate": 0.823377,
+            "fires_on": 71675,
+            "k": 12.0,
+            "precision": 0.533464,
+            "recall": 0.953112
+          },
+          {
+            "fire_rate": 0.937438,
+            "fires_on": 81604,
+            "k": 18.0,
+            "precision": 0.484192,
+            "recall": 0.984919
+          },
+          {
+            "fire_rate": 0.976829,
+            "fires_on": 85033,
+            "k": 24.0,
+            "precision": 0.469418,
+            "recall": 0.99499
+          },
+          {
+            "fire_rate": 0.995991,
+            "fires_on": 86701,
+            "k": 36.0,
+            "precision": 0.462578,
+            "recall": 0.999726
+          },
+          {
+            "fire_rate": 0.99915,
+            "fires_on": 86976,
+            "k": 48.0,
+            "precision": 0.461242,
+            "recall": 1.0
+          }
+        ],
+        "sweep_feature": "hours_to_pickup_end",
+        "sweep_label": "k hours",
+        "val_fire_rate": 0.636163,
+        "val_precision": 0.615894,
+        "val_recall": 0.850188
+      },
+      "rule": "predict wasted when hours_to_pickup_end < k"
+    }
+  },
+  "corpus": {
+    "events": 309069,
+    "events_by_type": {
+      "claim_cancelled": 14138,
+      "claim_completed": 80679,
+      "listing_cancelled": 4115,
+      "listing_claimed": 96988,
+      "listing_posted": 113149
+    },
+    "first_event": "2025-01-06T00:23:19+00:00",
+    "last_event": "2025-07-07T23:59:56.695919+00:00",
+    "listings": 113149
+  },
+  "features": {
+    "observation_interval_hours": 1.0,
+    "rows": 438093,
+    "split_fractions": {
+      "test": 0.2,
+      "train": 0.6,
+      "val": 0.2
+    },
+    "splits": {
+      "test": {
+        "base_rate": 0.456493,
+        "listings": 22116,
+        "positives": 39971,
+        "rows": 87561
+      },
+      "train": {
+        "base_rate": 0.47152,
+        "listings": 66241,
+        "positives": 124237,
+        "rows": 263482
+      },
+      "val": {
+        "base_rate": 0.46085,
+        "listings": 21920,
+        "positives": 40117,
+        "rows": 87050
+      }
+    }
+  },
+  "generated_by": "python -m ml.baselines",
+  "primary_metric": "pr_auc",
+  "recall_target": 0.8,
+  "what_this_is": "Rules baselines for Model A (will this open listing expire unclaimed?), measured on a SIMULATED corpus. Every figure here describes the generator documented in ml/docs/simulator.md, not real donation behaviour."
+}

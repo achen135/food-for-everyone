@@ -17,3 +17,12 @@ supabase/.temp/
 
 # generated vendor copy (scripts/copy-maplibre-worker.mjs)
 public/maplibre/
+
+# ml subsystem: Python source (ruff formats it) plus a virtualenv and generated
+# corpus output that Prettier has no business walking. The two Markdown files
+# that ARE prose — ml/README.md and ml/docs/simulator.md — are re-included
+# below, since they sit alongside the TypeScript docs in review.
+ml/.venv/
+ml/out/
+ml/src/
+ml/tests/

@@ -55,8 +55,7 @@ db-down: ## Stop the corpus Postgres (keeps the volume)
 db-reset: db-up ## Drop and recreate the ml schema. Needed after editing ml/sql/.
 	@$(COMPOSE) exec -T postgres psql -U ffe_ml -d ffe_ml -q \
 	  -c 'drop schema public cascade; create schema public;'
-	@$(BIN)/python -c "from ml.db import bootstrap, connect; \
-	  conn = connect().__enter__(); print('applied:', ', '.join(bootstrap(conn)))"
+	@$(BIN)/python -m ml.db_reset
 
 .PHONY: psql
 psql: ## Open a psql shell on the corpus database
@@ -73,6 +72,17 @@ jsonl: install ## Write the reference JSONL stream to $(OUT)/events.jsonl
 	@mkdir -p $(OUT)
 	@$(BIN)/python -m ml.simulate --seed $(SEED) --months $(MONTHS) \
 	  --out jsonl --path $(OUT)/events.jsonl
+
+.PHONY: features
+features: install db-up ## Compute point-in-time features + labels into features_waste
+	@$(BIN)/python -m ml.features
+
+.PHONY: eval-baselines
+eval-baselines: install db-up ## Measure the rules baselines, rewrite baselines.json
+	@$(BIN)/python -m ml.baselines
+
+.PHONY: reproduce
+reproduce: data features eval-baselines ## The full chain a clean checkout runs
 
 .PHONY: hash
 hash: install ## Print the stream hash — the determinism check, by hand

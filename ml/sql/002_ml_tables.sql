@@ -52,6 +52,10 @@ create table if not exists public.features_waste (
   posted_dow                   smallint    not null,
   as_of_hour                   smallint    not null,
   as_of_dow                    smallint    not null,
+  -- The hour `pickup_end` falls in. Separate from its duration, and by far the
+  -- sharpest single signal in the corpus: a window closing at 05:00 has almost
+  -- no chance of being collected, because nobody is open to collect it.
+  pickup_end_hour              smallint    not null,
 
   -- Donor track record, counted over that donor's prior listings only.
   donor_prior_listings         integer     not null,
@@ -59,13 +63,15 @@ create table if not exists public.features_waste (
   donor_prior_completion_rate  double precision,
   donor_prior_cancel_rate      double precision,
   donor_hours_since_last_post  double precision,
+  -- Median hours from post to claim over this donor's previously claimed
+  -- listings. Null until the donor has one.
+  donor_median_claim_latency   double precision,
 
   -- Local market conditions as of the observation.
   recipients_within_5km        integer     not null,
   recipients_within_15km       integer     not null,
   open_listings_within_15km    integer     not null,
   claims_within_15km_prior_7d  integer     not null,
-  median_claim_latency_hours   double precision,
 
   -- The thing being predicted: 1 = reached pickup_end unclaimed.
   label                        smallint    not null check (label in (0, 1)),

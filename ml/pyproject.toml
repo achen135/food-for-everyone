@@ -16,6 +16,12 @@ license = { text = "MIT" }
 # terms. psycopg is the only runtime dependency M11 adds.
 dependencies = [
   "psycopg[binary]>=3.2",
+  # M12. numpy carries the feature matrices and the spatial index's vectorised
+  # updates; scikit-learn supplies the metrics. Hand-rolling ROC-AUC and average
+  # precision would save a dependency and cost the one thing an eval harness has
+  # to have — being obviously correct.
+  "numpy>=2.0",
+  "scikit-learn>=1.5",
 ]
 
 [project.optional-dependencies]
@@ -71,3 +77,10 @@ strict = true
 # the sink so a JSONL-only run never imports it. That indirection is the reason
 # for the handful of `type: ignore`s there rather than a blanket relaxation.
 warn_unreachable = true
+
+# scikit-learn ships no py.typed marker, so mypy cannot see through it. The
+# alternative is a hand-written stub for four metric functions, which would be
+# a second thing to keep in sync with sklearn for no safety gained.
+[[tool.mypy.overrides]]
+module = ["sklearn.*"]
+ignore_missing_imports = true

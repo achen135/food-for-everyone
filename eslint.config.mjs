@@ -23,6 +23,11 @@ const eslintConfig = defineConfig([
     // resolution), not Node or the browser — linting them against our config
     // reports imports that are correct there and unresolvable here.
     "docs/benchmarks/*.js",
+    // The ml subsystem is Python — ruff and mypy own it. Without this, ESLint
+    // walks into `ml/.venv` and lints the JavaScript that scikit-learn ships
+    // inside its HTML repr, reporting warnings about somebody else's code in
+    // a directory that is not even committed.
+    "ml/**",
   ]),
 ]);
 
