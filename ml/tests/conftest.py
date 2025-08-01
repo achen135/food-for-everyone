@@ -91,3 +91,42 @@ def requires_slow() -> pytest.MarkDecorator:
         os.environ.get("ML_RUN_SLOW") != "1",
         reason="full-scale run; set ML_RUN_SLOW=1 (CI does, via `make test-slow`)",
     )
+
+
+def corpus_test_dsn() -> str:
+    """A DSN for a throwaway database, created if absent.
+
+    `tests/test_postgres.py` writes a small corpus to exercise the SQL
+    bootstrap and the COPY path. It used to do that in the **real** corpus
+    database, which replaced `public.events` with 3,370 rows and left
+    `test_committed_numbers_match_a_recomputation` permanently skipping — the
+    reproducibility check was present and never actually ran.
+
+    So the integration tests get their own database, named after the corpus one
+    with `_pytest` appended. Creating it needs autocommit (Postgres forbids
+    CREATE DATABASE inside a transaction) and a connection to `postgres`, which
+    both the compose container and the CI service container provide.
+    """
+    import psycopg
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
+
+    from ml.db import resolve_dsn
+
+    info = conninfo_to_dict(resolve_dsn())
+    base = str(info.get("dbname") or "ffe_ml")
+    target = f"{base}_pytest"
+
+    # make_conninfo's signature is (conninfo, **kwargs); the dict values are
+    # typed loosely by conninfo_to_dict, so pass them as kwargs off an
+    # empty base string.
+    admin = make_conninfo("", **{**info, "dbname": "postgres"})
+    with psycopg.connect(admin, autocommit=True) as conn:
+        exists = conn.execute("select 1 from pg_database where datname = %s", (target,)).fetchone()
+        if exists is None:
+            # The identifier is derived from our own DSN, not from input, but
+            # quote it properly anyway rather than interpolating bare.
+            conn.execute(
+                psycopg.sql.SQL("create database {}").format(psycopg.sql.Identifier(target))
+            )
+
+    return make_conninfo("", **{**info, "dbname": target})

@@ -222,6 +222,21 @@ def test_committed_numbers_match_a_recomputation() -> None:
     document = json.loads(BASELINES_JSON.read_text())
 
     with connect() as conn:
+        # Does the corpus even exist? On CI the database is an empty service
+        # container and nothing has run `make data`, so `public.events` is not
+        # there at all — and querying it raises `UndefinedTable` long before the
+        # fingerprint comparison below gets a chance to skip. Checking for the
+        # tables first is what makes the skip reachable.
+        present = conn.execute(
+            "select to_regclass('public.events'), to_regclass('public.features_waste')"
+        ).fetchone()
+        assert present is not None
+        if present[0] is None or present[1] is None:
+            pytest.skip(
+                "no corpus in this database (public.events / public.features_waste absent). "
+                "Run `make reproduce` to build one and compare against baselines.json."
+            )
+
         counts = conn.execute(
             "select count(*), count(distinct listing_id) from public.events"
         ).fetchone()

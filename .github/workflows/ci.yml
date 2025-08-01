@@ -110,5 +110,23 @@ jobs:
       - name: Mypy
         run: mypy
 
+      # The M12 definition of done: `make data && make features &&
+      # eval-baselines` reproduces the committed numbers from a clean checkout.
+      # Run as module invocations rather than Makefile targets, because the
+      # Makefile's `db-up` brings up a compose service and CI uses a service
+      # container instead.
+      #
+      # This runs BEFORE pytest on purpose, so the corpus exists by the time
+      # `test_committed_numbers_match_a_recomputation` looks for it — otherwise
+      # that test skips and the strongest check in the suite never executes.
+      - name: Reproduce corpus, features and baselines
+        run: |
+          python -m ml.simulate --out postgres
+          python -m ml.features
+          python -m ml.baselines
+
+      - name: baselines.json is byte-identical to the committed one
+        run: git diff --exit-code -- baselines.json
+
       - name: Pytest
         run: pytest

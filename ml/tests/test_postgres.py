@@ -20,6 +20,7 @@ from ml.events import EVENT_TYPES, PAYLOAD_KEYS
 from ml.simulate.config import SimulationConfig
 from ml.simulate.engine import simulate
 from ml.simulate.sink import PostgresSink, drain
+from tests.conftest import corpus_test_dsn
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ML_TEST_POSTGRES") != "1",
@@ -27,6 +28,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 SMALL = SimulationConfig(seed=31337, months=1, n_donors=50, n_recipients=35)
+
+
+@pytest.fixture(scope="module")
+def dsn() -> str:
+    """The throwaway database. NOT the corpus — see `corpus_test_dsn`."""
+    return corpus_test_dsn()
 
 
 def _load_corpus(conn) -> None:  # type: ignore[no-untyped-def]
@@ -37,16 +44,16 @@ def _load_corpus(conn) -> None:  # type: ignore[no-untyped-def]
 
 
 @pytest.fixture(scope="module")
-def corpus_conn():  # type: ignore[no-untyped-def]
-    """A bootstrapped database holding one small corpus."""
-    with connect() as conn:
+def corpus_conn(dsn: str):  # type: ignore[no-untyped-def]
+    """A bootstrapped throwaway database holding one small corpus."""
+    with connect(dsn) as conn:
         bootstrap(conn)
         _load_corpus(conn)
         yield conn
 
 
-def test_bootstrap_creates_every_table() -> None:
-    with connect() as conn:
+def test_bootstrap_creates_every_table(dsn: str) -> None:
+    with connect(dsn) as conn:
         applied = bootstrap(conn)
         assert applied == ["001_events.sql", "002_ml_tables.sql"]
         rows = conn.execute(
@@ -58,9 +65,9 @@ def test_bootstrap_creates_every_table() -> None:
         assert table in present
 
 
-def test_bootstrap_is_idempotent() -> None:
+def test_bootstrap_is_idempotent(dsn: str) -> None:
     """It runs on every `make data`, so a second application must be a no-op."""
-    with connect() as conn:
+    with connect(dsn) as conn:
         bootstrap(conn)
         bootstrap(conn)
 
@@ -139,15 +146,15 @@ def test_truncate_restarts_identity(corpus_conn) -> None:  # type: ignore[no-unt
 
 
 @pytest.mark.parametrize(
-    "dsn",
+    "bad_dsn",
     [
         "postgresql://x:y@db.abcdefgh.supabase.co:5432/postgres",
         "postgresql://x:y@aws-0-us-east-1.pooler.supabase.com:6543/postgres",
     ],
 )
-def test_supabase_dsn_is_refused(dsn: str) -> None:
+def test_supabase_dsn_is_refused(bad_dsn: str) -> None:
     """A generated corpus written into the production log would be
     indistinguishable from real history the moment it landed — and the log is
     append-only, so there is no clean way back."""
     with pytest.raises(UnsafeTargetError):
-        assert_not_supabase(dsn)
+        assert_not_supabase(bad_dsn)
