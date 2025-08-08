@@ -81,8 +81,12 @@ features: install db-up ## Compute point-in-time features + labels into features
 eval-baselines: install db-up ## Measure the rules baselines, rewrite baselines.json
 	@$(BIN)/python -m ml.baselines
 
+.PHONY: model
+model: install db-up ## Train Model A, calibrate it, rewrite ml/model/
+	@$(BIN)/python -m ml.model
+
 .PHONY: reproduce
-reproduce: data features eval-baselines ## The full chain a clean checkout runs
+reproduce: data features eval-baselines model ## The full chain a clean checkout runs
 
 .PHONY: hash
 hash: install ## Print the stream hash — the determinism check, by hand

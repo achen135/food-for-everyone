@@ -43,12 +43,28 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal
 
-__all__ = ["TRAIN_FRACTION", "VAL_FRACTION", "Split", "SplitPlan", "assign_splits"]
+__all__ = [
+    "TRAIN_FRACTION",
+    "VAL_FIT_FRACTION",
+    "VAL_FRACTION",
+    "Split",
+    "SplitPlan",
+    "SubSplit",
+    "assign_splits",
+    "bisect_by_time",
+]
 
 Split = Literal["train", "val", "test"]
 
 TRAIN_FRACTION: Final[float] = 0.60
 VAL_FRACTION: Final[float] = 0.20
+
+SubSplit = Literal["fit", "op"]
+
+#: Where `val` is cut in two for M13. The earlier half selects hyperparameters
+#: and fits the probability calibrator; the later half picks the operating
+#: threshold and the tier boundary. See `bisect_by_time`.
+VAL_FIT_FRACTION: Final[float] = 0.50
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,3 +127,54 @@ def assign_splits(
         assignment[listing_id] = split
 
     return assignment, plan, purged
+
+
+def bisect_by_time(
+    spans: dict[str, tuple[float, float]],
+    fraction: float = VAL_FIT_FRACTION,
+) -> tuple[dict[str, SubSplit], float, int]:
+    """Cut one split in two by time, purging listings that straddle the cut.
+
+    ## Why this exists
+
+    Calibrating a model and then choosing an operating threshold on **the same
+    rows** produces a threshold fitted to the scale those rows defined. The
+    reported precision at the target recall then describes the calibration set,
+    not a fresh one, and it is optimistic by an amount nobody can quote. M13's
+    brief calls for the two to be chosen on disjoint slices of `val`, and this
+    is the cut.
+
+    ## Why by time rather than at random
+
+    The same reasoning as the top-level split, one level down. `val` spans about
+    five weeks of simulated time; a random half would mix rows from the same
+    listing and the same week across both slices, and the market features are
+    computed from a shared, growing log. Cutting by time keeps the property the
+    whole eval rests on — nothing on one side of a boundary is chronologically
+    after anything on the other.
+
+    `spans` maps listing id to `(first_as_of, last_as_of)` as epoch seconds.
+    A listing lands in `fit` when **all** of its observations precede the
+    boundary and in `op` when all of them follow it; one whose observations
+    span the boundary is purged, exactly as `assign_splits` purges listings
+    straddling a top-level boundary. Returns the assignment, the boundary, and
+    the purge count.
+    """
+    if not spans:
+        raise ValueError("no listings to bisect")
+
+    start = min(first for first, _ in spans.values())
+    end = max(last for _, last in spans.values())
+    boundary = start + (end - start) * fraction
+
+    assignment: dict[str, SubSplit] = {}
+    purged = 0
+    for listing_id, (first, last) in spans.items():
+        if last < boundary:
+            assignment[listing_id] = "fit"
+        elif first >= boundary:
+            assignment[listing_id] = "op"
+        else:
+            purged += 1
+
+    return assignment, boundary, purged

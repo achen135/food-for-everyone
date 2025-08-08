@@ -26,3 +26,11 @@ ml/.venv/
 ml/out/
 ml/src/
 ml/tests/
+
+# Generated, and their exact bytes are the check. `make model` and
+# `make eval-baselines` rewrite these from Python, and CI asserts the result is
+# byte-identical to what is committed. If Prettier also had an opinion on them
+# the two checks would want different files and neither could be satisfied.
+# (baselines.json happens to match Prettier today; that is luck, not a contract.)
+ml/model/
+ml/baselines.json

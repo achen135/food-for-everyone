@@ -13,6 +13,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
+# LightGBM's manylinux wheel links against OpenMP, which python:3.12-slim does
+# not carry. Without this the image builds and then fails on `import lightgbm`.
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Dependency metadata first, so an edit to the source does not invalidate the

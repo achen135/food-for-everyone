@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from ml.baselines.rules import BASELINES, Baseline, sweep_operating_points
+from ml.corpus import corpus_fingerprint
 from ml.db import connect
 from ml.eval.harness import evaluate_across_splits, round_floats, split_sizes
 from ml.eval.metrics import DEFAULT_RECALL_TARGET
@@ -32,31 +33,6 @@ from ml.features.spec import OBSERVATION_INTERVAL_HOURS
 from ml.features.writer import FeatureMatrix, load_matrix
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent.parent.parent / "baselines.json"
-
-
-def _corpus_fingerprint(conn: Any) -> dict[str, Any]:
-    """Enough to tell whether `baselines.json` describes the corpus on disk.
-
-    Not a hash of every row — a count, a span and a per-type breakdown, which is
-    what actually changes when someone regenerates with a different seed or a
-    different month count. `make eval-baselines` depends on `make features`,
-    which depends on `make data`, so the three are normally in step; this is how
-    a mismatch is noticed when they are not.
-    """
-    total, first, last, listings = conn.execute(
-        "select count(*), min(occurred_at), max(occurred_at), count(distinct listing_id) "
-        "from public.events"
-    ).fetchone()
-    by_type = dict(
-        conn.execute("select event_type, count(*) from public.events group by 1 order by 1")
-    )
-    return {
-        "events": int(total),
-        "listings": int(listings),
-        "first_event": first.isoformat(),
-        "last_event": last.isoformat(),
-        "events_by_type": {key: int(value) for key, value in sorted(by_type.items())},
-    }
 
 
 #: An operating point that fires on more than this share of observations is
@@ -116,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     with connect(args.dsn) as conn:
-        fingerprint = _corpus_fingerprint(conn)
+        fingerprint = corpus_fingerprint(conn)
         matrix = load_matrix(conn)
 
     if len(matrix) == 0:

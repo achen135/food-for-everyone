@@ -59,11 +59,17 @@ class FeatureMatrix:
         label: np.ndarray,
         split: np.ndarray,
         listing_id: np.ndarray,
+        as_of: np.ndarray,
     ) -> None:
         self.columns = columns
         self.label = label
         self.split = split
         self.listing_id = listing_id
+        #: Observation time as epoch seconds. Float rather than datetime64 so
+        #: comparisons are plain arithmetic and no timezone can be lost on the
+        #: way in; `ml.model.dataset` turns it back into an aware datetime for
+        #: reporting. M13 needs it to sub-divide `val` by time.
+        self.as_of = as_of
 
     def __len__(self) -> int:
         return int(self.label.shape[0])
@@ -78,9 +84,12 @@ class FeatureMatrix:
     def labels(self, split: str | None = None) -> np.ndarray:
         return self.label if split is None else cast(np.ndarray, self.label[self.mask(split)])
 
+    def times(self, split: str | None = None) -> np.ndarray:
+        return self.as_of if split is None else cast(np.ndarray, self.as_of[self.mask(split)])
+
 
 def _iter_rows(conn: psycopg.Connection, names: list[str]) -> Iterator[tuple[Any, ...]]:
-    selected = ", ".join(["listing_id", "label", "split", *names])
+    selected = ", ".join(["listing_id", "as_of", "label", "split", *names])
     with conn.cursor(name="features_scan") as cursor:
         cursor.itersize = 50_000
         cursor.execute(f"select {selected} from public.features_waste order by as_of, listing_id")
@@ -98,15 +107,17 @@ def load_matrix(conn: psycopg.Connection, names: list[str] | None = None) -> Fea
         names = [name for name in FEATURE_NAMES if name != "food_category"]
 
     listing_ids: list[str] = []
+    times: list[float] = []
     labels: list[int] = []
     splits: list[str] = []
     values: list[list[float]] = [[] for _ in names]
 
     for row in _iter_rows(conn, names):
         listing_ids.append(str(row[0]))
-        labels.append(int(row[1]))
-        splits.append(str(row[2]))
-        for position, raw in enumerate(row[3:]):
+        times.append(row[1].timestamp())
+        labels.append(int(row[2]))
+        splits.append(str(row[3]))
+        for position, raw in enumerate(row[4:]):
             # NULL means "not known" (a donor with no history yet), which numpy
             # carries as NaN. Rules baselines that touch a nullable column say
             # explicitly what they do with it.
@@ -120,4 +131,5 @@ def load_matrix(conn: psycopg.Connection, names: list[str] | None = None) -> Fea
         label=np.asarray(labels, dtype=np.int8),
         split=np.asarray(splits, dtype=object),
         listing_id=np.asarray(listing_ids, dtype=object),
+        as_of=np.asarray(times, dtype=np.float64),
     )

@@ -1,0 +1,672 @@
+{
+  "algorithm": "LightGBM gradient-boosted trees (binary objective)",
+  "calibration": {
+    "fitted_on": "val_fit",
+    "knots_committed_in": "model_a.json",
+    "method": "isotonic",
+    "n_knots": 144,
+    "why": "chosen up front rather than by comparing methods on the calibration set, which would be circular; see ml/src/ml/model/calibrate.py"
+  },
+  "comparison_to_baselines": {
+    "against": {
+      "recipient_scarcity": {
+        "baseline_test_pr_auc": 0.635634,
+        "baseline_test_roc_auc": 0.671259,
+        "beats": true,
+        "model_test_pr_auc": 0.971484,
+        "model_test_roc_auc": 0.975509,
+        "name": "Recipients within 15 km",
+        "pr_auc_margin": 0.33585,
+        "pr_auc_relative_gain": 0.52837
+      },
+      "time_pressure": {
+        "baseline_test_pr_auc": 0.766038,
+        "baseline_test_roc_auc": 0.79003,
+        "beats": true,
+        "model_test_pr_auc": 0.971484,
+        "model_test_roc_auc": 0.975509,
+        "name": "Hours to pickup_end",
+        "pr_auc_margin": 0.205446,
+        "pr_auc_relative_gain": 0.268193
+      }
+    },
+    "beats_all_baselines": true,
+    "measured_on": "test",
+    "primary_metric": "pr_auc",
+    "source": "ml/baselines.json (committed in M12, before this model existed)"
+  },
+  "corpus": {
+    "events": 309069,
+    "events_by_type": {
+      "claim_cancelled": 14138,
+      "claim_completed": 80679,
+      "listing_cancelled": 4115,
+      "listing_claimed": 96988,
+      "listing_posted": 113149
+    },
+    "first_event": "2025-01-06T00:23:19+00:00",
+    "last_event": "2025-07-07T23:59:56.695919+00:00",
+    "listings": 113149
+  },
+  "dataset": {
+    "excluded_features": [
+      "food_category"
+    ],
+    "feature_names": [
+      "hours_to_pickup_end",
+      "hours_since_posted",
+      "lead_time_hours",
+      "pickup_window_hours",
+      "quantity_units",
+      "notes_length",
+      "donor_verified",
+      "donor_lat",
+      "donor_lng",
+      "posted_hour",
+      "posted_dow",
+      "as_of_hour",
+      "as_of_dow",
+      "pickup_end_hour",
+      "donor_prior_listings",
+      "donor_prior_claim_rate",
+      "donor_prior_completion_rate",
+      "donor_prior_cancel_rate",
+      "donor_hours_since_last_post",
+      "donor_median_claim_latency",
+      "recipients_within_5km",
+      "recipients_within_15km",
+      "open_listings_within_15km",
+      "claims_within_15km_prior_7d"
+    ],
+    "n_features": 24,
+    "val_boundary": "2025-05-14T02:07:09.933810+00:00",
+    "val_fit_base_rate": 0.465782,
+    "val_fit_fraction": 0.5,
+    "val_fit_rows": 41951,
+    "val_listings_purged_at_boundary": 152,
+    "val_op_base_rate": 0.455229,
+    "val_op_rows": 43622
+  },
+  "generated_by": "python -m ml.model",
+  "goal_check": {
+    "checked_on": "test",
+    "false_alarm_rate": 0.042992,
+    "false_alarm_rate_limit": 0.25,
+    "false_alarm_rate_met": true,
+    "flagged_share": 0.404666,
+    "goal_met": true,
+    "precision": 0.942257,
+    "recall": 0.835281,
+    "recall_met": true,
+    "recall_target": 0.8,
+    "stated_goal": "catch >= 80% of doomed listings at <= 25% false-alarm rate (FPR)",
+    "threshold": 0.718619,
+    "threshold_chosen_on": "val_op"
+  },
+  "limitations": [
+    "SIMULATED DATA. The model can only learn structure the simulator put in. ml/docs/simulator.md states the assumptions and therefore bounds what any metric here can claim.",
+    "The margin over the time-pressure baseline is large mostly because of one feature, pickup_end_hour, which carries the largest share of both gain and mean|SHAP|. The generator decides collection substantially by whether the pickup window closes while recipients are open, so the model is recovering the generator's own rule. On real data that rule would be softer and this margin would shrink.",
+    "PR-AUC is quoted against an OBSERVATION-level base rate of ~0.457. The listing-level waste rate is 24.8%; against that number the same PR-AUC would look nearly twice as good. The observation-level population is the one scored at serving time, so it is the correct denominator here.",
+    "food_category is excluded. On simulated titles the keyword rules recover the generator's own category almost exactly, so the feature is more informative here than it could be in production. It was worth +0.0013 val PR-AUC.",
+    "recipients_within_5km and recipients_within_15km carry a large share of the model's gain, and they are a LOSSY PROXY: the event log has no organization-registration event, so a recipient is invisible until its first claim. Their distributions are stable across splits (per-split medians 40/42/41 and 238/246/243, identical maxima), so this is not producing train-to-test drift \u2014 but the feature would improve immediately if FFE emitted an org_registered event. See docs/ML Subsystem.md \u00a77.",
+    "Hyperparameters and the calibrator are both fitted on val_fit. Calibration measured on that slice would be optimistic; the Brier score and reliability curve reported for `test` are the honest ones."
+  ],
+  "metrics": {
+    "test": {
+      "at_recall_target": {
+        "precision": 0.942257,
+        "reachable": true,
+        "recall": 0.835281,
+        "recall_target": 0.8,
+        "threshold": 0.718619
+      },
+      "base_rate": 0.456493,
+      "brier": 0.06299,
+      "calibrated_scale": true,
+      "lift_over_base": 2.128145,
+      "n": 87561,
+      "n_positive": 39971,
+      "pr_auc": 0.971484,
+      "reliability": [
+        {
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "count": 36602,
+          "mean_score": 0.014179,
+          "observed_rate": 0.016666
+        },
+        {
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "count": 1354,
+          "mean_score": 0.157811,
+          "observed_rate": 0.143279
+        },
+        {
+          "bin_lower": 0.2,
+          "bin_upper": 0.3,
+          "count": 3617,
+          "mean_score": 0.251057,
+          "observed_rate": 0.226431
+        },
+        {
+          "bin_lower": 0.3,
+          "bin_upper": 0.4,
+          "count": 1572,
+          "mean_score": 0.32807,
+          "observed_rate": 0.325064
+        },
+        {
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "count": 4395,
+          "mean_score": 0.432971,
+          "observed_rate": 0.423891
+        },
+        {
+          "bin_lower": 0.5,
+          "bin_upper": 0.6,
+          "count": 2452,
+          "mean_score": 0.572963,
+          "observed_rate": 0.520392
+        },
+        {
+          "bin_lower": 0.6,
+          "bin_upper": 0.7,
+          "count": 2136,
+          "mean_score": 0.651956,
+          "observed_rate": 0.613764
+        },
+        {
+          "bin_lower": 0.7,
+          "bin_upper": 0.8,
+          "count": 4977,
+          "mean_score": 0.734868,
+          "observed_rate": 0.739401
+        },
+        {
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "count": 2501,
+          "mean_score": 0.830735,
+          "observed_rate": 0.827669
+        },
+        {
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "count": 27955,
+          "mean_score": 0.990367,
+          "observed_rate": 0.988625
+        }
+      ],
+      "roc_auc": 0.975509
+    },
+    "train": {
+      "at_recall_target": {
+        "precision": 0.96501,
+        "reachable": true,
+        "recall": 0.804277,
+        "recall_target": 0.8,
+        "threshold": 0.719048
+      },
+      "base_rate": 0.47152,
+      "brier": 0.058573,
+      "calibrated_scale": true,
+      "lift_over_base": 2.070749,
+      "n": 263482,
+      "n_positive": 124237,
+      "pr_auc": 0.976399,
+      "reliability": [
+        {
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "count": 108003,
+          "mean_score": 0.01403,
+          "observed_rate": 0.014074
+        },
+        {
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "count": 3359,
+          "mean_score": 0.157836,
+          "observed_rate": 0.132182
+        },
+        {
+          "bin_lower": 0.2,
+          "bin_upper": 0.3,
+          "count": 10472,
+          "mean_score": 0.252636,
+          "observed_rate": 0.21228
+        },
+        {
+          "bin_lower": 0.3,
+          "bin_upper": 0.4,
+          "count": 4269,
+          "mean_score": 0.328355,
+          "observed_rate": 0.320216
+        },
+        {
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "count": 13408,
+          "mean_score": 0.434047,
+          "observed_rate": 0.415797
+        },
+        {
+          "bin_lower": 0.5,
+          "bin_upper": 0.6,
+          "count": 7696,
+          "mean_score": 0.572709,
+          "observed_rate": 0.588228
+        },
+        {
+          "bin_lower": 0.6,
+          "bin_upper": 0.7,
+          "count": 6474,
+          "mean_score": 0.650983,
+          "observed_rate": 0.649367
+        },
+        {
+          "bin_lower": 0.7,
+          "bin_upper": 0.8,
+          "count": 14612,
+          "mean_score": 0.73598,
+          "observed_rate": 0.758486
+        },
+        {
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "count": 7660,
+          "mean_score": 0.830274,
+          "observed_rate": 0.865535
+        },
+        {
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "count": 87529,
+          "mean_score": 0.990375,
+          "observed_rate": 0.990118
+        }
+      ],
+      "roc_auc": 0.97905
+    },
+    "val": {
+      "at_recall_target": {
+        "precision": 0.960206,
+        "reachable": true,
+        "recall": 0.801157,
+        "recall_target": 0.8,
+        "threshold": 0.719048
+      },
+      "base_rate": 0.46085,
+      "brier": 0.060901,
+      "calibrated_scale": true,
+      "lift_over_base": 2.112549,
+      "n": 87050,
+      "n_positive": 40117,
+      "pr_auc": 0.973569,
+      "reliability": [
+        {
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "count": 36778,
+          "mean_score": 0.013929,
+          "observed_rate": 0.015689
+        },
+        {
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "count": 1134,
+          "mean_score": 0.157041,
+          "observed_rate": 0.175485
+        },
+        {
+          "bin_lower": 0.2,
+          "bin_upper": 0.3,
+          "count": 3352,
+          "mean_score": 0.25151,
+          "observed_rate": 0.260143
+        },
+        {
+          "bin_lower": 0.3,
+          "bin_upper": 0.4,
+          "count": 1463,
+          "mean_score": 0.328465,
+          "observed_rate": 0.316473
+        },
+        {
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "count": 4395,
+          "mean_score": 0.43404,
+          "observed_rate": 0.413652
+        },
+        {
+          "bin_lower": 0.5,
+          "bin_upper": 0.6,
+          "count": 2309,
+          "mean_score": 0.572648,
+          "observed_rate": 0.556085
+        },
+        {
+          "bin_lower": 0.6,
+          "bin_upper": 0.7,
+          "count": 2121,
+          "mean_score": 0.651227,
+          "observed_rate": 0.627063
+        },
+        {
+          "bin_lower": 0.7,
+          "bin_upper": 0.8,
+          "count": 4646,
+          "mean_score": 0.735246,
+          "observed_rate": 0.735687
+        },
+        {
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "count": 2475,
+          "mean_score": 0.830439,
+          "observed_rate": 0.840808
+        },
+        {
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "count": 28377,
+          "mean_score": 0.990793,
+          "observed_rate": 0.989358
+        }
+      ],
+      "roc_auc": 0.977052
+    }
+  },
+  "model": "Model A \u2014 will this open donation listing expire unclaimed?",
+  "model_version": "model_a-v1-76e19cce",
+  "operating_points": {
+    "chosen_on": "val_op",
+    "recall_target": 0.8,
+    "recall_target_reachable": true,
+    "threshold_high": 0.718619,
+    "threshold_high_basis": "best precision among thresholds reaching recall >= 0.8 on val_op",
+    "threshold_low": 0.455229,
+    "threshold_low_basis": "the observed base rate on val_op; below it a listing is less likely than an average open listing to be wasted",
+    "val_op_base_rate": 0.455229,
+    "val_op_precision_at_target": 0.943895,
+    "val_op_recall_at_target": 0.836187
+  },
+  "primary_metric": "pr_auc",
+  "risk_tiers": [
+    {
+      "base_rate": 0.455229,
+      "split": "val_op",
+      "tiers": {
+        "high": {
+          "observed_waste_rate": 0.943895,
+          "rows": 17592,
+          "share": 0.403283
+        },
+        "low": {
+          "observed_waste_rate": 0.077212,
+          "rows": 23455,
+          "share": 0.537687
+        },
+        "medium": {
+          "observed_waste_rate": 0.56,
+          "rows": 2575,
+          "share": 0.05903
+        }
+      }
+    },
+    {
+      "base_rate": 0.456493,
+      "split": "test",
+      "tiers": {
+        "high": {
+          "observed_waste_rate": 0.942257,
+          "rows": 35433,
+          "share": 0.404666
+        },
+        "low": {
+          "observed_waste_rate": 0.077608,
+          "rows": 46748,
+          "share": 0.533891
+        },
+        "medium": {
+          "observed_waste_rate": 0.549442,
+          "rows": 5380,
+          "share": 0.061443
+        }
+      }
+    }
+  ],
+  "shap_top_features": [
+    {
+      "feature": "pickup_end_hour",
+      "mean_abs_shap": 1.820489,
+      "mean_shap": 0.04366,
+      "share": 0.311877
+    },
+    {
+      "feature": "hours_to_pickup_end",
+      "mean_abs_shap": 1.568256,
+      "mean_shap": -0.056837,
+      "share": 0.268666
+    },
+    {
+      "feature": "as_of_hour",
+      "mean_abs_shap": 0.611114,
+      "mean_shap": -0.043536,
+      "share": 0.104693
+    },
+    {
+      "feature": "recipients_within_15km",
+      "mean_abs_shap": 0.487125,
+      "mean_shap": 0.016161,
+      "share": 0.083452
+    },
+    {
+      "feature": "donor_median_claim_latency",
+      "mean_abs_shap": 0.254857,
+      "mean_shap": -0.010167,
+      "share": 0.043661
+    }
+  ],
+  "splits": {
+    "test": {
+      "base_rate": 0.456493,
+      "listings": 22116,
+      "positives": 39971,
+      "rows": 87561
+    },
+    "train": {
+      "base_rate": 0.47152,
+      "listings": 66241,
+      "positives": 124237,
+      "rows": 263482
+    },
+    "val": {
+      "base_rate": 0.46085,
+      "listings": 21920,
+      "positives": 40117,
+      "rows": 87050
+    }
+  },
+  "training": {
+    "base_params": {
+      "bagging_fraction": 0.9,
+      "bagging_freq": 1,
+      "bagging_seed": 20250808,
+      "data_random_seed": 20250808,
+      "deterministic": true,
+      "feature_fraction": 0.9,
+      "feature_fraction_seed": 20250808,
+      "force_row_wise": true,
+      "metric": "average_precision",
+      "num_threads": 4,
+      "objective": "binary",
+      "seed": 20250808,
+      "verbosity": -1
+    },
+    "max_rounds": 500,
+    "method": "exhaustive grid",
+    "n_trials": 18,
+    "num_threads": 4,
+    "objective": "average_precision (PR-AUC)",
+    "seed": 20250808,
+    "selected_on": "val_fit",
+    "space": {
+      "learning_rate": [
+        0.05,
+        0.1
+      ],
+      "min_data_in_leaf": [
+        50,
+        200,
+        500
+      ],
+      "num_leaves": [
+        31,
+        63,
+        127
+      ]
+    },
+    "trials": [
+      {
+        "best_iteration": 124,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 50,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.976044
+      },
+      {
+        "best_iteration": 114,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 200,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.97607
+      },
+      {
+        "best_iteration": 121,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.976154
+      },
+      {
+        "best_iteration": 98,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 50,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.975819
+      },
+      {
+        "best_iteration": 94,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 200,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.976156
+      },
+      {
+        "best_iteration": 91,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.976117
+      },
+      {
+        "best_iteration": 62,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 50,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.975727
+      },
+      {
+        "best_iteration": 90,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 200,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.975822
+      },
+      {
+        "best_iteration": 84,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.975951
+      },
+      {
+        "best_iteration": 56,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 50,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.976117
+      },
+      {
+        "best_iteration": 63,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 200,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.976094
+      },
+      {
+        "best_iteration": 55,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 500,
+        "num_leaves": 31,
+        "val_fit_pr_auc": 0.976176
+      },
+      {
+        "best_iteration": 31,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 50,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.976149
+      },
+      {
+        "best_iteration": 32,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 200,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.975996
+      },
+      {
+        "best_iteration": 43,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 500,
+        "num_leaves": 63,
+        "val_fit_pr_auc": 0.976121
+      },
+      {
+        "best_iteration": 36,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 50,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.975289
+      },
+      {
+        "best_iteration": 38,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 200,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.975507
+      },
+      {
+        "best_iteration": 39,
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 500,
+        "num_leaves": 127,
+        "val_fit_pr_auc": 0.976062
+      }
+    ],
+    "winner": {
+      "best_iteration": 55,
+      "params": {
+        "learning_rate": 0.1,
+        "min_data_in_leaf": 500,
+        "num_leaves": 31
+      },
+      "val_fit_pr_auc": 0.976176
+    }
+  },
+  "what_this_is": "A calibrated LightGBM binary classifier scoring OPEN listings hourly, trained and measured entirely on a SIMULATED event corpus. Every figure in this file describes the generator documented in ml/docs/simulator.md, not real donation behaviour. FFE has no real traffic; nothing here may be quoted as if it did."
+}

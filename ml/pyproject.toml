@@ -22,6 +22,15 @@ dependencies = [
   # to have — being obviously correct.
   "numpy>=2.0",
   "scikit-learn>=1.5",
+  # M13. LightGBM is the model (docs/ML Subsystem.md §2 — tabular, mixed-type,
+  # modest row count, where GBDTs win and neural nets do not). It also supplies
+  # the SHAP values directly through `predict(pred_contrib=True)`, which is why
+  # the `shap` package — and the numba/llvmlite tree the M13 brief warned about
+  # — is NOT a dependency here. See ml/src/ml/model/explain.py.
+  #
+  # On macOS the wheel needs OpenMP from outside pip: `brew install libomp`.
+  # On Debian (the Dockerfile) it is `libgomp1`.
+  "lightgbm>=4.5",
 ]
 
 [project.optional-dependencies]

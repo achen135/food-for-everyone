@@ -128,5 +128,25 @@ jobs:
       - name: baselines.json is byte-identical to the committed one
         run: git diff --exit-code -- baselines.json
 
+      # M13. Trains Model A from the corpus just regenerated above, so the
+      # committed artifact is proven to fall out of the committed corpus rather
+      # than out of whatever happened to be on the machine that trained it.
+      - name: Train Model A
+        run: python -m ml.model
+
+      # The M13 definition of done is that the model CARD's numbers regenerate.
+      # The whole bundle is checked because it was measured to hold: training
+      # this corpus on arm64 (the dev machine) and on x86_64 (this runner)
+      # produces a bit-identical booster, and the isotonic knots are rounded
+      # (ml/src/ml/model/calibrate.py) so the last-ULP difference in `predict`
+      # cannot reach the file.
+      #
+      # If this ever fails, the two cases are worth telling apart:
+      #   - ml/model/ is stale     -> run `make model` and commit the result
+      #   - the toolchain moved    -> same, but read the diff in the card's
+      #                               metrics before trusting it
+      - name: ml/model/ is byte-identical to the committed bundle
+        run: git diff --exit-code -- model/
+
       - name: Pytest
         run: pytest

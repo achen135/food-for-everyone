@@ -1,0 +1,155 @@
+{
+  "additivity_max_gap": 0.0,
+  "base_value": -0.246669,
+  "computed_on": "val",
+  "features": [
+    {
+      "feature": "pickup_end_hour",
+      "mean_abs_shap": 1.820489,
+      "mean_shap": 0.04366,
+      "share": 0.311877
+    },
+    {
+      "feature": "hours_to_pickup_end",
+      "mean_abs_shap": 1.568256,
+      "mean_shap": -0.056837,
+      "share": 0.268666
+    },
+    {
+      "feature": "as_of_hour",
+      "mean_abs_shap": 0.611114,
+      "mean_shap": -0.043536,
+      "share": 0.104693
+    },
+    {
+      "feature": "recipients_within_15km",
+      "mean_abs_shap": 0.487125,
+      "mean_shap": 0.016161,
+      "share": 0.083452
+    },
+    {
+      "feature": "donor_median_claim_latency",
+      "mean_abs_shap": 0.254857,
+      "mean_shap": -0.010167,
+      "share": 0.043661
+    },
+    {
+      "feature": "donor_prior_claim_rate",
+      "mean_abs_shap": 0.249485,
+      "mean_shap": -0.065716,
+      "share": 0.04274
+    },
+    {
+      "feature": "recipients_within_5km",
+      "mean_abs_shap": 0.239018,
+      "mean_shap": 0.003315,
+      "share": 0.040947
+    },
+    {
+      "feature": "hours_since_posted",
+      "mean_abs_shap": 0.128968,
+      "mean_shap": -0.0316,
+      "share": 0.022094
+    },
+    {
+      "feature": "donor_lng",
+      "mean_abs_shap": 0.094976,
+      "mean_shap": 0.004027,
+      "share": 0.016271
+    },
+    {
+      "feature": "pickup_window_hours",
+      "mean_abs_shap": 0.085001,
+      "mean_shap": -0.002997,
+      "share": 0.014562
+    },
+    {
+      "feature": "donor_prior_completion_rate",
+      "mean_abs_shap": 0.077909,
+      "mean_shap": -0.021484,
+      "share": 0.013347
+    },
+    {
+      "feature": "claims_within_15km_prior_7d",
+      "mean_abs_shap": 0.047302,
+      "mean_shap": 0.002248,
+      "share": 0.008104
+    },
+    {
+      "feature": "posted_hour",
+      "mean_abs_shap": 0.044588,
+      "mean_shap": -0.009717,
+      "share": 0.007639
+    },
+    {
+      "feature": "open_listings_within_15km",
+      "mean_abs_shap": 0.025857,
+      "mean_shap": 0.002751,
+      "share": 0.00443
+    },
+    {
+      "feature": "donor_prior_listings",
+      "mean_abs_shap": 0.017354,
+      "mean_shap": 0.015425,
+      "share": 0.002973
+    },
+    {
+      "feature": "lead_time_hours",
+      "mean_abs_shap": 0.016091,
+      "mean_shap": 0.002223,
+      "share": 0.002757
+    },
+    {
+      "feature": "posted_dow",
+      "mean_abs_shap": 0.012836,
+      "mean_shap": -0.0001,
+      "share": 0.002199
+    },
+    {
+      "feature": "quantity_units",
+      "mean_abs_shap": 0.011132,
+      "mean_shap": -0.000648,
+      "share": 0.001907
+    },
+    {
+      "feature": "donor_prior_cancel_rate",
+      "mean_abs_shap": 0.010208,
+      "mean_shap": 0.000397,
+      "share": 0.001749
+    },
+    {
+      "feature": "notes_length",
+      "mean_abs_shap": 0.0096,
+      "mean_shap": -0.000165,
+      "share": 0.001645
+    },
+    {
+      "feature": "donor_lat",
+      "mean_abs_shap": 0.008488,
+      "mean_shap": -0.000585,
+      "share": 0.001454
+    },
+    {
+      "feature": "donor_hours_since_last_post",
+      "mean_abs_shap": 0.007175,
+      "mean_shap": 0.000784,
+      "share": 0.001229
+    },
+    {
+      "feature": "donor_verified",
+      "mean_abs_shap": 0.006126,
+      "mean_shap": 0.000319,
+      "share": 0.001049
+    },
+    {
+      "feature": "as_of_dow",
+      "mean_abs_shap": 0.003243,
+      "mean_shap": -0.000156,
+      "share": 0.000556
+    }
+  ],
+  "method": "TreeSHAP via LightGBM Booster.predict(pred_contrib=True)",
+  "rows_sampled": 20000,
+  "sampling": "even stride over rows ordered by as_of",
+  "units": "raw score (log-odds), uncalibrated booster"
+}

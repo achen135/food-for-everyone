@@ -16,12 +16,12 @@ surface at-risk listings before the food is lost. Plan and rationale:
 
 ## Status
 
-| Milestone |                                                                  |     |
-| --------- | ---------------------------------------------------------------- | --- |
-| M11       | Simulator — seeded generative model writing `events`-schema rows | ✅  |
-| M12       | Feature pipeline + rules baselines + eval harness                | —   |
-| M13       | LightGBM model + FastAPI serving                                 | —   |
-| M14       | Batch scoring, write-back, drift monitoring                      | —   |
+| Milestone |                                                                  |                      |
+| --------- | ---------------------------------------------------------------- | -------------------- |
+| M11       | Simulator — seeded generative model writing `events`-schema rows | ✅                   |
+| M12       | Feature pipeline + rules baselines + eval harness                | ✅                   |
+| M13       | LightGBM model + FastAPI serving                                 | model ✅ / serving — |
+| M14       | Batch scoring, write-back, drift monitoring                      | —                    |
 
 ## Quick start
 
@@ -29,20 +29,25 @@ Needs Python 3.12+ and Docker (for the corpus Postgres).
 
 ```bash
 cd ml
-make reproduce # data -> features -> baselines, from nothing (~25 s total)
+make reproduce # data -> features -> baselines -> model, from nothing (~2 min)
 make check     # ruff + mypy + pytest
 ```
 
-`make reproduce` is `make data && make features && make eval-baselines`, and it
-regenerates `baselines.json` **byte-identically** from an empty database. Each
-step is idempotent: `data` truncates `events` and replays the seed, `features`
-truncates `features_waste` and recomputes it.
+`make reproduce` is `make data && make features && make eval-baselines && make
+model`, and it regenerates both `baselines.json` and everything in `model/`
+**byte-identically** from an empty database. Each step is idempotent: `data`
+truncates `events` and replays the seed, `features` truncates `features_waste`
+and recomputes it, `model` retrains and overwrites the bundle.
+
+On macOS LightGBM's wheel needs OpenMP from outside pip — `brew install libomp`
+— or `import lightgbm` fails with a `libomp.dylib` load error.
 
 ```
 make help      # every target
 make data      # ~309k events into Postgres
 make features  # ~438k point-in-time observations into features_waste
 make eval-baselines   # rewrite baselines.json
+make model     # train Model A, rewrite model/ (~75 s)
 make jsonl     # reference event stream to out/events.jsonl
 make hash      # stream sha256 — the determinism check
 make psql      # a shell on the corpus database
@@ -71,9 +76,32 @@ Base rate 0.457, so PR-AUC is always quoted beside it. That base rate is
 listings stay open longer and so contribute more hourly observations. Both
 numbers are real and they answer different questions — see Design Decisions.
 
-M13's model has to beat both of these on the untouched test split. Those test
-numbers were computed once, here, before any model existed, which is what stops
-the bar moving later; `k` was chosen on validation only.
+Those test numbers were computed once, in M12, before any model existed, which
+is what stops the bar moving later; `k` was chosen on validation only.
+
+**Model A (M13) clears both**, on the same untouched test split and through the
+same eval harness:
+
+|                                    | test PR-AUC | test ROC-AUC | test Brier |
+| ---------------------------------- | ----------- | ------------ | ---------- |
+| hours to `pickup_end` (baseline)   | 0.7660      | 0.7900       | —          |
+| recipients within 15 km (baseline) | 0.6356      | 0.6713       | —          |
+| **Model A**                        | **0.9715**  | **0.9755**   | **0.0630** |
+
+Margins: **+0.2054** PR-AUC over time-pressure (+26.8%) and
+**+0.3358** over recipient-scarcity (+52.8%). The stated goal — catch
+
+> = 80% of doomed listings at <= 25% false-alarm rate — is met at the threshold
+> chosen on `val_op`: recall **0.8353** at a **0.0430** false-alarm rate,
+> precision **0.9423**. Train-to-test PR-AUC gap is
+> +0.0049, so this is not overfitting.
+
+**Read the margin with the caveat attached.** Most of it comes from one feature,
+`pickup_end_hour` (31.2% of mean|SHAP|): the simulator decides collection
+substantially by whether the pickup window closes while recipients are open, so
+the model is largely recovering the generator's own rule. On real data that rule
+would be softer and the margin smaller. `model/model_card.json` states this and
+five other limitations.
 
 ## Layout
 
@@ -85,7 +113,12 @@ ml/
 ├── sql/
 │   ├── 001_events.sql   MIRRORS a real migration — see the sync obligation below
 │   └── 002_ml_tables.sql features_waste, predictions, listing_risk, metric_history
-├── baselines.json       the committed bar M13 has to beat
+├── baselines.json       the committed bar M13 had to beat
+├── model/               the committed Model A bundle                  [M13]
+│   ├── model_a.txt      the booster, LightGBM text format
+│   ├── model_a.json     feature order, isotonic knots, tier thresholds
+│   ├── model_card.json  params, search, metrics, goal check, limitations
+│   └── shap_summary.json  mean|SHAP| per feature
 ├── src/ml/
 │   ├── events.py        the payload contract, in code
 │   ├── db.py            connection, bootstrap, truncate
@@ -105,8 +138,16 @@ ml/
 │   │   ├── text.py      quantity and category from free text
 │   │   └── writer.py    features_waste in and out
 │   ├── baselines/       the two rules baselines                       [M12]
-│   └── eval/            splits, metrics, harness                      [M12]
-├── tests/               determinism, contract, volume, LEAKAGE, splits
+│   ├── eval/            splits, metrics, harness                      [M12]
+│   ├── corpus.py        the corpus fingerprint both committed files carry
+│   └── model/           Model A: train, calibrate, explain, card      [M13]
+│       ├── dataset.py   design matrix; cutting val into fit / op
+│       ├── search.py    the 18-point grid, scored on val_fit only
+│       ├── calibrate.py isotonic + the two tier boundaries
+│       ├── explain.py   TreeSHAP via LightGBM, no `shap` dependency
+│       ├── artifact.py  the committed bundle, in and out
+│       └── card.py      the model card, and what it must not contain
+├── tests/               determinism, contract, volume, LEAKAGE, splits, model
 └── docs/simulator.md    what the generator assumes, and what that costs
 ```
 
