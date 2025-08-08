@@ -32,12 +32,14 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
+from psycopg_pool import ConnectionPool
 
 __all__ = [
     "DEFAULT_DSN",
     "assert_not_supabase",
     "bootstrap",
     "connect",
+    "connection_pool",
     "resolve_dsn",
     "truncate_events",
 ]
@@ -111,3 +113,19 @@ def truncate_events(conn: psycopg.Connection) -> None:
     """
     conn.execute("truncate table public.events restart identity")
     conn.commit()
+
+
+def connection_pool(dsn: str | None = None, min_size: int = 1, max_size: int = 8) -> ConnectionPool:
+    """A pool for the serving path, resolved through the same guard.
+
+    `connect` opens a connection per call, which is right for the batch jobs —
+    they open one and hold it for the length of a run. The scoring service is
+    the opposite shape: many short writes to `predictions`, concurrently. A
+    single shared connection would serialise them behind one protocol
+    conversation and show up directly in the p99 the milestone has to report.
+
+    Goes through `resolve_dsn` rather than reading the environment itself, so
+    the Supabase refusal applies here too. Nothing about serving should be able
+    to reach a database `connect` would decline.
+    """
+    return ConnectionPool(resolve_dsn(dsn), min_size=min_size, max_size=max_size, open=True)

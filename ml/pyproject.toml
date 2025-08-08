@@ -31,6 +31,14 @@ dependencies = [
   # On macOS the wheel needs OpenMP from outside pip: `brew install libomp`.
   # On Debian (the Dockerfile) it is `libgomp1`.
   "lightgbm>=4.5",
+  # M13 serving. The pool is a psycopg companion package, not a third-party
+  # one: `connect` opens a connection per call, which is right for the batch
+  # jobs and wrong for a service doing many short concurrent writes to
+  # `predictions` — see ml/src/ml/db.py:connection_pool.
+  "psycopg-pool>=3.2",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +46,8 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.6",
   "mypy>=1.11",
+  # Starlette's TestClient is an httpx client under the hood.
+  "httpx>=0.27",
 ]
 
 [project.scripts]

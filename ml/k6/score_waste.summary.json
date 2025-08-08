@@ -1,0 +1,16 @@
+{
+  "endpoint": "POST /score/waste",
+  "note": "SIMULATED corpus; see ml/docs/simulator.md. Latency is real, the data is not.",
+  "vus": 4,
+  "duration": "30s",
+  "requests": 52166,
+  "error_rate": 0,
+  "latency_ms": {
+    "min": 0.921,
+    "med": 2.15,
+    "p90": 2.818,
+    "p95": 3.11,
+    "p99": 4.09772,
+    "max": 17.722
+  }
+}

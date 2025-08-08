@@ -41,12 +41,19 @@ from ml.model.artifact import (
     save_bundle,
 )
 from ml.model.calibrate import choose_operating_points, fit_calibrator
-from ml.model.card import baseline_comparison, build_card, goal_check, tier_report
+from ml.model.card import (
+    baseline_comparison,
+    build_card,
+    goal_check,
+    serving_benchmark,
+    tier_report,
+)
 from ml.model.dataset import build_dataset
 from ml.model.explain import shap_summary
 from ml.model.search import SEARCH_GRID, run_search
 
 BASELINES_PATH = Path(__file__).resolve().parents[3] / "baselines.json"
+K6_SUMMARY_PATH = Path(__file__).resolve().parents[3] / "k6" / "score_waste.summary.json"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -59,6 +66,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--recall-target", type=float, default=DEFAULT_RECALL_TARGET)
     parser.add_argument(
         "--baselines", default=str(BASELINES_PATH), help="The committed bar to compare against."
+    )
+    parser.add_argument(
+        "--k6-summary",
+        default=str(K6_SUMMARY_PATH),
+        help="The committed k6 run, embedded in the card's serving_benchmark block.",
     )
     return parser.parse_args(argv)
 
@@ -186,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         goal=goal,
         tiers=tiers,
         shap_top=shap["features"][:5],
+        serving=serving_benchmark(Path(args.k6_summary)),
     )
 
     (output_dir / CARD_FILE).write_text(

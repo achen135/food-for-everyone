@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -54,15 +55,29 @@ __all__ = [
     "BOOSTER_FILE",
     "CARD_FILE",
     "MODEL_DIR",
+    "MODEL_DIR_ENV",
     "RUNTIME_FILE",
     "SHAP_FILE",
     "ModelA",
     "compute_model_version",
     "load_model_a",
+    "resolve_model_dir",
     "save_bundle",
 ]
 
+#: Where the committed bundle lives.
+#:
+#: `parents[3]` walks `src/ml/model/artifact.py` back up to `ml/`, which is
+#: right for a source checkout and **wrong once the package is installed**: in
+#: the container the module sits in `site-packages/ml/model/`, so the same walk
+#: lands on `/usr/local/lib/python3.12/model` and the service dies at import.
+#: Only a real image build surfaces that — an editable install never does.
+#:
+#: So the path is configurable and the Dockerfile sets it, and
+#: `resolve_model_dir` reports what it tried rather than letting a bare
+#: FileNotFoundError surface three frames deep inside `json.loads`.
 MODEL_DIR = Path(__file__).resolve().parents[3] / "model"
+MODEL_DIR_ENV = "ML_MODEL_DIR"
 BOOSTER_FILE = "model_a.txt"
 RUNTIME_FILE = "model_a.json"
 CARD_FILE = "model_card.json"
@@ -160,9 +175,24 @@ def save_bundle(
     )
 
 
+def resolve_model_dir(directory: Path | None = None) -> Path:
+    """Explicit argument, then `$ML_MODEL_DIR`, then the source-tree default."""
+    if directory is not None:
+        return directory
+    configured = os.environ.get(MODEL_DIR_ENV)
+    if configured:
+        return Path(configured)
+    return MODEL_DIR
+
+
 def load_model_a(directory: Path | None = None) -> ModelA:
     """Load the committed bundle. Used by evaluation, serving and M14 alike."""
-    directory = directory or MODEL_DIR
+    directory = resolve_model_dir(directory)
+    if not (directory / RUNTIME_FILE).exists():
+        raise FileNotFoundError(
+            f"no model bundle at {directory} (looked for {RUNTIME_FILE}). "
+            f"Run `make model` to train one, or set ${MODEL_DIR_ENV} to where it lives."
+        )
     runtime = json.loads((directory / RUNTIME_FILE).read_text(encoding="utf-8"))
     points = runtime["operating_points"]
     return ModelA(

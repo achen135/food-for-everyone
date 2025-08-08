@@ -13,6 +13,12 @@ BIN     := $(VENV)/bin
 SEED    ?= 20250718
 MONTHS  ?= 6
 OUT     ?= out
+API_PORT ?= 8000
+# Must be an instant INSIDE the corpus. The corpus ends 2025-07-07, so a
+# wall-clock cursor would put every listing past its pickup window. This is the
+# same instant docker-compose.yml pins for ml-api and the k6 fixture was built
+# at — one of the corpus's busiest hours, 257 listings open.
+SERVE_AS_OF ?= 2025-06-13T23:00:00+00:00
 
 # Docker Desktop on macOS does not always put the CLI on PATH.
 DOCKER  ?= $(shell command -v docker 2>/dev/null || echo /Applications/Docker.app/Contents/Resources/bin/docker)
@@ -22,7 +28,7 @@ export ML_DATABASE_URL ?= postgresql://ffe_ml:ffe_ml@localhost:55432/ffe_ml
 
 .PHONY: help
 help: ## Show this help
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 # -- environment ------------------------------------------------------------
@@ -87,6 +93,31 @@ model: install db-up ## Train Model A, calibrate it, rewrite ml/model/
 
 .PHONY: reproduce
 reproduce: data features eval-baselines model ## The full chain a clean checkout runs
+
+# -- serving ----------------------------------------------------------------
+
+.PHONY: serve
+serve: install db-up ## Run the scoring API on the host (uvicorn, reload off)
+	@ML_SERVE_AS_OF=$(SERVE_AS_OF) $(BIN)/python -m ml.serve --port $(API_PORT)
+
+.PHONY: api-up
+api-up: ## Build and start the ml-api container, and wait for /healthz
+	@$(COMPOSE) up -d --build ml-api
+	@printf 'waiting for ml-api'
+	@for i in $$(seq 1 120); do \
+	  if [ "$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:$(API_PORT)/healthz)" = "200" ]; then \
+	    echo " ready"; exit 0; fi; \
+	  printf '.'; sleep 1; \
+	done; echo; echo "ml-api did not become healthy" >&2; $(COMPOSE) logs --tail 30 ml-api; exit 1
+
+.PHONY: api-down
+api-down: ## Stop the ml-api container
+	@$(COMPOSE) stop ml-api
+
+.PHONY: k6
+k6: api-up ## Run the committed load test and rewrite k6/score_waste.summary.json
+	@command -v k6 >/dev/null || { echo "k6 is not installed (brew install k6)" >&2; exit 1; }
+	@cd .. && k6 run ml/k6/score_waste.js
 
 .PHONY: hash
 hash: install ## Print the stream hash — the determinism check, by hand

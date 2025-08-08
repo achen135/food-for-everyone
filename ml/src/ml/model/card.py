@@ -21,7 +21,39 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["baseline_comparison", "build_card", "goal_check", "tier_report"]
+__all__ = [
+    "baseline_comparison",
+    "build_card",
+    "goal_check",
+    "serving_benchmark",
+    "tier_report",
+]
+
+
+def serving_benchmark(summary_path: Path) -> dict[str, Any]:
+    """The committed k6 result, read rather than retyped.
+
+    `docs/ML Subsystem.md` §6 says the résumé's "p99 < N ms" may only cite a
+    number the committed k6 script produced. Retyping it into the card by hand
+    would be exactly the gap that rule exists to close, so the card reads the
+    script's own output file. Absent, the card says so rather than omitting the
+    section, because a missing section reads as an oversight and "not measured"
+    reads as a fact.
+    """
+    if not summary_path.exists():
+        return {
+            "measured": False,
+            "why": (
+                "no committed k6 summary at ml/k6/score_waste.summary.json; run "
+                "`make k6` against the compose stack"
+            ),
+        }
+    document: dict[str, Any] = json.loads(summary_path.read_text(encoding="utf-8"))
+    return {
+        "measured": True,
+        "source": "ml/k6/score_waste.js (committed)",
+        **document,
+    }
 
 
 def baseline_comparison(baselines_path: Path, test_metrics: dict[str, Any]) -> dict[str, Any]:
@@ -139,6 +171,7 @@ def build_card(
     goal: dict[str, Any],
     tiers: list[dict[str, Any]],
     shap_top: list[dict[str, Any]],
+    serving: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "generated_by": "python -m ml.model",
@@ -163,6 +196,7 @@ def build_card(
         "goal_check": goal,
         "risk_tiers": tiers,
         "shap_top_features": shap_top,
+        "serving_benchmark": serving,
         "limitations": [
             "SIMULATED DATA. The model can only learn structure the simulator put in. "
             "ml/docs/simulator.md states the assumptions and therefore bounds what any "

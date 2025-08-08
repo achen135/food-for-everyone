@@ -49,9 +49,37 @@ services:
       ML_DATABASE_URL: postgresql://ffe_ml:ffe_ml@postgres:5432/ffe_ml
     volumes:
       - ./ml:/app
-    # Fleshed out in M13, when this becomes the FastAPI scoring service. For now
-    # it is a shell you can run the pipeline in.
+    # A shell to run the pipeline in. The serving process is `ml-api` below.
     command: ["sleep", "infinity"]
+
+  # The scoring API (docs/ML Subsystem.md §5, M13). Reads the corpus, scores
+  # open listings, writes `predictions`.
+  ml-api:
+    build:
+      context: ./ml
+    container_name: ffe_ml_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ML_DATABASE_URL: postgresql://ffe_ml:ffe_ml@postgres:5432/ffe_ml
+      # The instant the service replays the log to, and the earliest `as_of` it
+      # can answer. NOT `now`: the corpus ends 2025-07-07, so a wall-clock
+      # cursor would put every listing long past its pickup window and the whole
+      # log would score as doomed. The k6 script drives this same instant.
+      #
+      # Chosen inside the corpus's test split (which begins 2025-06-01), late
+      # enough that donors have history and the market features are warm, and at
+      # one of the corpus's busiest hours — a Friday evening with 264 listings
+      # actually open. Picked by measuring open listings per hour, not by
+      # guessing: an arbitrary instant gave 25, and a benchmark cycling 25 ids
+      # would describe those ids more than it describes the service.
+      ML_SERVE_AS_OF: "2025-06-13T23:00:00+00:00"
+    ports:
+      - "8000:8000"
+    # No volume mount. The image carries the model bundle it was built with, so
+    # what runs here is what was committed — mounting ./ml over it would let a
+    # dirty working tree silently become the thing being benchmarked.
 
 volumes:
   ml_pgdata:
