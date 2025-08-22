@@ -1,0 +1,148 @@
+name: ML drift monitoring
+
+# Nightly PSI: how far the population being scored has moved from the one Model
+# A was trained on. Per feature, plus the score distribution. See
+# docs/ML Subsystem.md §5 (M14) and ml/src/ml/drift/.
+#
+# ## Why the default source is production, not the corpus
+#
+# The corpus is deterministic — `make data` regenerates it byte-identically from
+# a seed. Drift measured on it therefore prints the *same numbers every night
+# forever*, which is a regression check wearing a monitor's clothes. Useful, but
+# not monitoring, and running it on a schedule would be theatre.
+#
+# Production is the population that actually moves: listings open and close,
+# the demo data gets re-seeded, donors accumulate history. Comparing it against
+# the simulated training distribution measures the **sim-to-real gap** — the
+# limitation the model card already states — and tracks it over time. That is a
+# real number that can really change, which is the only kind worth a schedule.
+#
+# Expect it to be loud. Geography and market features compare real Chicago
+# organizations against a generated metro, so large PSI there is the honest
+# reading, not a fault. It is never to be quoted as "model drift".
+#
+# ## Why the corpus is rebuilt anyway
+#
+# The **reference** side is `features_waste where split = 'train'`, which lives
+# in the corpus database. So the job regenerates the corpus and its features
+# (~25s, deterministic) purely to have something to compare against, then reads
+# the current window from production.
+#
+# ## Where the output actually persists
+#
+# `metric_history` is written to the service container, which is destroyed with
+# the job — so in CI the durable record is the uploaded JSON artifact, not the
+# table. The table is the store for local runs (`make drift`), where the
+# database survives. Said plainly because a monitoring table that silently
+# discards its rows is worse than no table.
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Which log to read the current window from"
+        type: choice
+        options: [production, corpus]
+        default: production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ffe_ml
+          POSTGRES_PASSWORD: ffe_ml
+          POSTGRES_DB: ffe_ml
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ffe_ml -d ffe_ml"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ML_DATABASE_URL: postgresql://ffe_ml:ffe_ml@localhost:5432/ffe_ml
+      FFE_SUPABASE_URL: ${{ secrets.FFE_SUPABASE_URL }}
+      FFE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FFE_SUPABASE_SERVICE_ROLE_KEY }}
+      SOURCE: ${{ inputs.source || 'production' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        id: config
+        run: |
+          if [ "${SOURCE}" = "corpus" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -n "${FFE_SUPABASE_URL}" ] && [ -n "${FFE_SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::error::FFE_SUPABASE_URL / FFE_SUPABASE_SERVICE_ROLE_KEY are not set."
+            exit 1
+          fi
+          echo "::warning::ML drift monitoring is not configured; skipping. Set FFE_SUPABASE_URL and FFE_SUPABASE_SERVICE_ROLE_KEY, or dispatch with source=corpus."
+
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.configured == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml/pyproject.toml
+
+      - name: Install
+        if: steps.config.outputs.configured == 'true'
+        run: pip install -e .
+
+      # The reference distribution only. Deterministic, so this is a fixed cost
+      # rather than a source of night-to-night variation in the numbers.
+      - name: Rebuild the training reference
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          python -m ml.simulate --out postgres
+          python -m ml.features
+
+      - name: Measure drift
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          python -m ml.drift --source "${SOURCE}" | tee drift-report.txt
+          python -m ml.drift --source "${SOURCE}" --json --no-write > drift-report.json
+
+      - name: Summarise
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          {
+            echo '### ML drift — `'"${SOURCE}"'` vs. training'
+            echo
+            echo '```'
+            cat drift-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: |
+            ml/drift-report.txt
+            ml/drift-report.json
+          retention-days: 90

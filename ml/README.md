@@ -16,12 +16,12 @@ surface at-risk listings before the food is lost. Plan and rationale:
 
 ## Status
 
-| Milestone |                                                                  |                      |
-| --------- | ---------------------------------------------------------------- | -------------------- |
-| M11       | Simulator — seeded generative model writing `events`-schema rows | ✅                   |
-| M12       | Feature pipeline + rules baselines + eval harness                | ✅                   |
-| M13       | LightGBM model + FastAPI serving                                 | model ✅ / serving — |
-| M14       | Batch scoring, write-back, drift monitoring                      | —                    |
+| Milestone |                                                                  |     |
+| --------- | ---------------------------------------------------------------- | --- |
+| M11       | Simulator — seeded generative model writing `events`-schema rows | ✅  |
+| M12       | Feature pipeline + rules baselines + eval harness                | ✅  |
+| M13       | LightGBM model + FastAPI serving                                 | ✅  |
+| M14       | Batch scoring, write-back, drift monitoring                      | ✅  |
 
 ## Quick start
 
@@ -172,6 +172,78 @@ single uvicorn worker, where more VUs only queue. The sweep is in the script's
 header. Past the knee a p99 stops describing the service and starts describing
 the queue in front of it. Simulated corpus; the latency is real, the data is not.
 
+## Batch scoring and drift (M14)
+
+Two scheduled jobs close the subsystem. Both reuse the serving path rather than
+reimplementing it — `ScoringService` for scoring, `build_observations` for the
+monitoring window — so there is one answer to "what are this listing's
+features" everywhere in `ml/`.
+
+```bash
+make batch          # score every open corpus listing -> corpus listing_risk
+make batch-prod-dry # the same against FFE production, writing nothing
+make batch-prod     # ... and for real (needs FFE_SUPABASE_* )
+make drift          # PSI of the trailing window vs. split=train
+```
+
+### Batch scoring
+
+Warm a `FeatureState` to `as_of`, take `open_listings(as_of)`, score each,
+upsert `listing_risk`, delete the rows for listings that have since closed.
+
+Two decisions the brief left open, both settled here:
+
+- **`scored_at` is the run's `as_of`, not `now()`.** The same events plus the
+  same model at the same instant produce byte-identical rows, so "did anything
+  change?" is answerable. Verified: three consecutive corpus runs leave an
+  identical md5 over all 257 rows.
+- **Closed listings are deleted, not left stale.** A missing row is the state
+  the reader already handles; a stale one would let the app badge a listing
+  that is no longer open, and the read is built to fail silently, so nothing
+  would ever report it.
+
+The write target is derived from the source, never chosen separately — a corpus
+replay writing to production would put simulated ids in the table the live app
+reads, and that combination is not expressible.
+
+### Drift
+
+PSI per feature, plus the score distribution, against `features_waste where
+split = 'train'`. Bin edges are frozen from the reference; empty buckets are
+floored rather than dropped (dropping them scores a fully-displaced feature
+0.0 — the most stable possible answer for the most drifted possible data);
+nulls are their own bucket.
+
+**The current population must be built at the reference's grain**, and getting
+that wrong is the interesting failure. Training rows are hourly observations of
+open listings, so a _snapshot_ of one instant gives every row the same
+`as_of_hour` and scores PSI **11.79** against a reference spanning all
+twenty-four — maximal drift from a system in which nothing drifted. A second
+attempt walked an hourly cursor over a `ScoringService` warmed only to the
+window start, so no new listing could appear and the population decayed within
+a day. The fix was to stop reimplementing the cadence and call
+`build_observations`, which _is_ the cadence that produced the reference.
+
+### What drift measured, and it is the honest headline
+
+Corpus window vs. its own training split: **19 of 24 features stable**, score
+PSI 0.0033. The one significant reading is `donor_prior_listings` (3.26), which
+drifts _by construction_ — it counts cumulatively over a growing log, so donors
+observed later have longer track records than the same donors during training.
+
+FFE **production** vs. the same training split: **22 of 24 features
+significantly drifted**, score PSI **1.28**. `recipients_within_15km` alone
+scores 12.5, because production has 14 recipient organizations and the
+simulated metro has hundreds.
+
+That number is the point. It says plainly that Model A, trained on
+`ml/docs/simulator.md`'s generator, is being asked about a population it has
+never seen — and it is why all 13 open production listings score between 0.008
+and 0.043 against a `high` threshold of 0.719, so nothing is escalated. The
+pipeline is real end to end; the _scores on real data are not trustworthy_, and
+the monitor is what proves it rather than asserting it. `ML_RISK_ESCALATION`
+therefore ships **off** in production.
+
 ## Layout
 
 ```
@@ -191,7 +263,8 @@ ml/
 │   └── shap_summary.json  mean|SHAP| per feature
 ├── src/ml/
 │   ├── events.py        the payload contract, in code
-│   ├── db.py            connection, bootstrap, truncate
+│   ├── db.py            connection, bootstrap, truncate (refuses Supabase)
+│   ├── supabase_rest.py the ONLY door to FFE production; read-only or one table
 │   ├── simulate/        the generative model                          [M11]
 │   │   ├── config.py    every tunable, all-constants-no-logic
 │   │   ├── geo.py       Chicago-metro clusters, haversine
@@ -218,12 +291,18 @@ ml/
 │       ├── explain.py   TreeSHAP via LightGBM, no `shap` dependency
 │       ├── artifact.py  the committed bundle, in and out
 │       └── card.py      the model card, and what it must not contain
-│   └── serve/           the scoring API                              [M13]
-│       ├── app.py       FastAPI: routes, status codes, timing
-│       ├── scoring.py   replay to a cursor, snapshot, score, log
-│       ├── sources.py   EventSource — corpus now, production in M14
-│       ├── schemas.py   pydantic in and out; why as_of is required
-│       └── metrics.py   Prometheus text, hand-rolled
+│   ├── serve/           the scoring API                              [M13]
+│   │   ├── app.py       FastAPI: routes, status codes, timing
+│   │   ├── scoring.py   replay to a cursor, snapshot, score, log
+│   │   ├── sources.py   EventSource — corpus, and FFE production (M14)
+│   │   ├── schemas.py   pydantic in and out; why as_of is required
+│   │   └── metrics.py   Prometheus text, hand-rolled
+│   ├── batch/           scheduled scoring + write-back                [M14]
+│   │   ├── __main__.py  one pass: warm, score, upsert, prune
+│   │   └── writeback.py corpus vs. production sinks; source picks the sink
+│   └── drift/           PSI monitoring                                [M14]
+│       ├── psi.py       the statistic and its three sharp edges
+│       └── __main__.py  reference vs. window, report, metric_history
 ├── tests/               determinism, contract, volume, LEAKAGE, splits, model, serving
 └── docs/simulator.md    what the generator assumes, and what that costs
 ```

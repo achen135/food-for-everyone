@@ -124,7 +124,7 @@ hash: install ## Print the stream hash — the determinism check, by hand
 	@$(BIN)/python -m ml.simulate --seed $(SEED) --months $(MONTHS) \
 	  --out jsonl --path - 2>/dev/null | shasum -a 256
 
-# -- batch scoring (M14) ------------------------------------------------------
+# -- batch scoring and monitoring (M14) --------------------------------------
 
 .PHONY: batch
 batch: install db-up ## Score every open listing into the corpus listing_risk
@@ -145,6 +145,14 @@ batch-prod: install ## Score FFE production listings into production listing_ris
 .PHONY: batch-prod-dry
 batch-prod-dry: install ## Same, but write nothing — use this first
 	@$(BIN)/python -m ml.batch --source production --dry-run
+
+.PHONY: drift
+drift: install db-up ## PSI of the trailing scoring window vs. the training split
+	@ML_SERVE_AS_OF=$(SERVE_AS_OF) $(BIN)/python -m ml.drift --source corpus
+
+.PHONY: drift-dry
+drift-dry: install db-up ## Same, without appending a metric_history row
+	@ML_SERVE_AS_OF=$(SERVE_AS_OF) $(BIN)/python -m ml.drift --source corpus --no-write
 
 # -- checks -----------------------------------------------------------------
 

@@ -84,3 +84,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# M14 drift reports (generated locally by `make drift`; CI uploads them as
+# workflow artifacts instead of committing them).
+ml/drift-report.txt
+ml/drift-report.json
