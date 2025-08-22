@@ -261,6 +261,40 @@ async function seedActivity(
   return { listings: plan.listings.length, claims: plan.claims.length };
 }
 
+/**
+ * Synthesise `events` rows for seeded activity (M14).
+ *
+ * The seed writes `listings` and `claims` **directly** rather than through the
+ * `security definer` transition functions, so none of it emits the events those
+ * functions record. That was a known gap from M10 — its migration says as much
+ * — and it did not matter until M14, whose batch scorer reads the event log and
+ * nothing else. Without this, a re-seeded database has fresh listings that the
+ * ML side cannot see at all.
+ *
+ * `backfill_events_incremental()` fills in whatever is missing, per listing, and
+ * is safe to call every run: a listing that already has a `listing_posted`
+ * event is skipped. It only ever INSERTs, so the append-only triggers on
+ * `events` are untouched — see `20260910203001_backfill_events_incremental.sql`.
+ *
+ * A failure here is reported, not thrown. The seed's job is the demo data; the
+ * event log is downstream of it, and an older database that has not run the
+ * M14 migration yet should still seed rather than abort.
+ */
+async function backfillEvents(admin: SupabaseClient): Promise<void> {
+  const { data, error } = await admin.rpc("backfill_events_incremental");
+  if (error) {
+    console.warn(
+      `Events backfill skipped: ${error.message}. ` +
+        "The ML batch scorer reads `events`, so run `supabase db push` and re-run " +
+        "this script if you need ml/ to see the seeded activity.",
+    );
+    return;
+  }
+  console.log(
+    `Events: ${data ?? 0} row(s) backfilled into the append-only log.`,
+  );
+}
+
 function chunked<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -390,6 +424,7 @@ async function main(): Promise<void> {
       `Activity: ${activity.listings} listings, ${activity.claims} claims ` +
         "over the last 90 days.",
     );
+    await backfillEvents(admin);
   }
 
   console.log(

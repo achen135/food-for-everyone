@@ -1,0 +1,101 @@
+name: ML batch scoring
+
+# Re-scores every open FFE listing and writes its risk tier to
+# `public.listing_risk`, which the app reads behind the `ML_RISK_ESCALATION`
+# flag. See docs/ML Subsystem.md §5 (M14) and ml/src/ml/batch/.
+#
+# ## Every six hours, not hourly
+#
+# §5 says "hourly". Hourly is ~720 runs a month against a free account's Actions
+# minutes, for a demo whose seeded listings have pickup windows measured in
+# hours to days. Every six hours keeps tiers meaningfully fresh at an eighth of
+# the cost, and the résumé bullet says "scheduled" rather than "hourly" to match
+# what this file actually does. Decided with Alex, 2026-09-10.
+#
+# ## What it needs
+#
+# Two repository secrets (Settings → Secrets and variables → Actions):
+#   FFE_SUPABASE_URL                the project URL, https://<ref>.supabase.co
+#   FFE_SUPABASE_SERVICE_ROLE_KEY   service-role key — bypasses RLS, which is
+#                                   required: `listing_risk` has no insert
+#                                   policy on purpose, so no other key can
+#                                   write it.
+#
+# The service-role key is why this job touches exactly one table. The write path
+# (`ml.batch.writeback.ListingRiskWriter`) names `listing_risk` in a constant and
+# takes no table parameter, and the read path is a separate object constructed
+# read-only. See ml/src/ml/supabase_rest.py.
+#
+# NOTE: GitHub disables scheduled workflows on repos with no commits for 60 days
+# — the same caveat as keepalive.yml.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Score and report without writing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two overlapping runs would upsert the same rows and each prune what the
+  # other just wrote. The job is idempotent, so cancelling the older one is safe.
+  group: ml-batch
+  cancel-in-progress: true
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+
+    env:
+      FFE_SUPABASE_URL: ${{ secrets.FFE_SUPABASE_URL }}
+      FFE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FFE_SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A scheduled job that fails every six hours because a secret was never
+      # set teaches you to ignore its notifications. Missing configuration is a
+      # warning on a schedule and an error when a human asked for the run.
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -n "${FFE_SUPABASE_URL}" ] && [ -n "${FFE_SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "::error::FFE_SUPABASE_URL / FFE_SUPABASE_SERVICE_ROLE_KEY are not set."
+            exit 1
+          fi
+          echo "::warning::ML batch scoring is not configured; skipping. Set FFE_SUPABASE_URL and FFE_SUPABASE_SERVICE_ROLE_KEY to enable it."
+
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.configured == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ml/pyproject.toml
+
+      # No dev extras and no Postgres service: the batch job reads production
+      # over HTTPS and writes production over HTTPS. The corpus database is not
+      # involved, and `--source production` defaults `--no-predictions` for
+      # exactly that reason (predictions are corpus-side history).
+      - name: Install
+        if: steps.config.outputs.configured == 'true'
+        run: pip install -e .
+
+      - name: Score open listings
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          python -m ml.batch --source production \
+            ${{ inputs.dry_run && '--dry-run' || '' }}

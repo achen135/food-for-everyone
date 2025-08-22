@@ -59,3 +59,20 @@ export function siteUrl(): string {
 
   return "http://localhost:3000";
 }
+
+/**
+ * Whether to surface ML waste-risk tiers on the listings page (M14).
+ *
+ * Server-only and read **inside a function**, per rule 1 above — the flag must
+ * not be inlined into the client bundle, and a missing value must not throw.
+ * Deliberately *not* `NEXT_PUBLIC_*`: the risk tier reaches the browser as
+ * rendered markup, and whether the feature is on is not the browser's business.
+ *
+ * Off unless explicitly enabled. Everything downstream falls back silently to
+ * the pre-M14 render, so "unset" and "the batch job has never run" look the
+ * same to a user, which is the intent — see `lib/db/listing-risk.ts`.
+ */
+export function mlRiskEscalationEnabled(): boolean {
+  const raw = process.env.ML_RISK_ESCALATION;
+  return raw === "1" || raw?.toLowerCase() === "true";
+}

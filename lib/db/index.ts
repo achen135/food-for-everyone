@@ -14,6 +14,10 @@ export {
 } from "@/lib/db/analytics";
 export { getMyProfile, getOrCreateProfile } from "@/lib/db/profiles";
 export {
+  getListingRiskTiers,
+  type ListingRiskMap,
+} from "@/lib/db/listing-risk";
+export {
   findCounterpartiesNear,
   getMyOrganization,
   getMyOrganizationPoint,
@@ -50,4 +54,5 @@ export type {
   Organization,
   OrganizationType,
   Profile,
+  RiskTier,
 } from "@/lib/db/types";

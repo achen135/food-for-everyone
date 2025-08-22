@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import {
   browseOpenListings,
+  getListingRiskTiers,
   getMyClaims,
   getMyListings,
   getMyOrganization,
@@ -16,6 +17,7 @@ import {
 } from "@/app/app/listings/actions";
 import { ListingActionButton } from "@/components/listings/listing-action-button";
 import { ListingForm } from "@/components/listings/listing-form";
+import { ListingRiskBadge } from "@/components/listings/listing-risk-badge";
 import { ListingStatusBadge } from "@/components/listings/listing-status-badge";
 import { ListingsRealtime } from "@/components/listings/listings-realtime";
 import { ContactLine, PickupWindow } from "@/components/listings/listing-meta";
@@ -61,6 +63,12 @@ async function DonorView() {
   const live = listings.filter(
     (l) => l.status === "open" || l.status === "claimed",
   );
+
+  // M14: waste-risk tiers for the listings actually on screen. Returns an empty
+  // map when the flag is off, the table is absent, or the batch job has not run
+  // — the page then renders exactly as it did before M14. See
+  // lib/db/listing-risk.ts for why this never surfaces an error.
+  const risk = await getListingRiskTiers(live.map((l) => l.id));
   const past = listings.filter(
     (l) => l.status === "completed" || l.status === "cancelled",
   );
@@ -102,10 +110,13 @@ async function DonorView() {
                       {listing.quantity}
                     </p>
                   </div>
-                  <ListingStatusBadge
-                    status={listing.status}
-                    pickupEnd={listing.pickup_end}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ListingRiskBadge tier={risk.get(listing.id)} />
+                    <ListingStatusBadge
+                      status={listing.status}
+                      pickupEnd={listing.pickup_end}
+                    />
+                  </div>
                 </div>
 
                 <PickupWindow

@@ -22,15 +22,30 @@ The reasoning, because it is the kind of choice that looks arbitrary later:
   path is therefore a separate, read-only connection — never a loosened guard,
   and never the connection that writes `predictions`.
 
-## Why the production source is a stub rather than an unwritten file
+## What M14 actually built, and why it is simpler than M13 expected
 
-`ProductionEventSource` raises, but it carries the query design in its
-docstring, because that design is the part with the trap in it. A live log
-cannot be replayed from the beginning per request; it has to be scoped, and
-getting the scope wrong silently produces training/serving skew — the exact
-failure `features_hash` exists to detect. Writing down what the scope has to
-cover is most of the work, and losing it between milestones would be the
-expensive part.
+M13 left `ProductionEventSource` as a stub whose docstring specified a
+**scoped** query — the set of slices a per-listing read would have to cover to
+reproduce `FeatureState`'s answers without replaying from the beginning. M14
+implemented something deliberately simpler: a **full replay** of the production
+log, and the reasoning is worth stating because it looks like the lazy option
+and is not.
+
+The scope analysis was written for the *serving* path, where a full replay per
+request costs seconds and the p99 target rules it out. The batch job is the
+opposite shape — it replays **once** per run, every few hours, and then scores
+every open listing off the one warm state. At production's current size
+(~700 events) a full replay is milliseconds, and it is *exactly* the
+computation `build_observations` performs, so there is no scope to get wrong
+and therefore **no skew to detect**. The scoped query would have been more
+code, strictly more risk, and slower to trust.
+
+That trade flips somewhere, and the crossover is a size not a date: when a full
+replay stops fitting comfortably in the batch job's startup budget — order 10⁶
+events, extrapolating from the corpus's 309k replaying in a few seconds — the
+scoped design becomes worth its risk. The slice list is preserved verbatim on
+`ProductionEventSource.SCOPED_QUERY_DESIGN` rather than deleted, because
+re-deriving it is most of that work and it was already done carefully once.
 """
 
 from __future__ import annotations
@@ -40,9 +55,16 @@ from datetime import datetime
 from typing import Protocol
 
 from ml.db import connect
+from ml.events import parse_instant
 from ml.features.log import LogEvent, from_postgres
+from ml.supabase_rest import SupabaseConfig, SupabaseRest
 
-__all__ = ["CorpusEventSource", "EventSource", "ProductionEventSource"]
+__all__ = [
+    "CorpusEventSource",
+    "EventSource",
+    "ProductionEventSource",
+    "production_source",
+]
 
 
 class EventSource(Protocol):
@@ -85,42 +107,100 @@ class CorpusEventSource:
 
 
 class ProductionEventSource:
-    """FFE's live `events` log. **M14.**
+    """FFE's live `events` log, over PostgREST, read-only.
 
-    Not implemented, and the reason it is not is worth more than the code would
-    be. A live log cannot be replayed from the beginning on every request — the
-    p99 target rules it out — so it has to be **scoped**, and the scope is not
-    obvious. To reproduce `FeatureState`'s answers for one listing it must cover:
+    Replays the whole log rather than a scoped slice — see the module docstring
+    for why that is the right shape for a batch job and the wrong one for a
+    per-request serving path, and where the crossover is.
 
-    - the target listing's own `listing_posted`, for every intrinsic feature;
-    - **every event of every prior listing by the same donor**, for the
-      `donor_prior_*` track record and `donor_median_claim_latency`;
-    - every `listing_posted` by any donor within `MARKET_RADIUS_KM` whose
-      pickup window has not closed, for `open_listings_within_15km`;
-    - every `listing_claimed` in the trailing `CLAIM_WINDOW_HOURS` near the
-      donor, for `claims_within_15km_prior_7d`;
-    - and, awkwardly, **every `listing_claimed` whose recipient is within the
-      radius, for the whole life of the log** — `recipients_within_*` is
-      cumulative, and a recipient enters the index through the claim it made,
-      whoever's listing that was.
+    Read-only structurally: the underlying `SupabaseRest` is constructed with
+    `read_only=True`, so every verb but GET raises before a request is built.
+    The batch job's write path is a separate object naming a separate table
+    (`ml.batch.writeback.ListingRiskWriter`).
 
-    That last one is the reason this is M14 work and not a footnote here: it is
-    unbounded in time, so it wants a maintained per-donor recipient count rather
-    than a query, and that is a schema decision. It is also the single strongest
-    argument for the `org_registered` event in `docs/ML Subsystem.md` §7 — with
-    registrations in the log, recipient geography would be a bounded lookup
-    instead of a scan over all history.
+    ## Production payloads are backfilled, and that is visible
 
-    Whatever this ends up doing, it connects **read-only and separately** from
-    `ml.db.connect`. The corpus connection and every write stay behind the
-    existing Supabase guard.
+    Every event M10's backfill synthesised carries `payload->>'backfilled' =
+    'true'`. `FeatureState` never looks at that key, so it costs nothing on the
+    scoring path — but it does mean `ml.events.validate_event` would reject
+    these rows on the exact-key-set check. That is correct and not worth
+    "fixing": the contract describes what the *simulator* emits, and a
+    reconstructed row is honestly a different thing. Anything quoting a number
+    derived from this source says "backfilled history", not "observed traffic".
     """
 
+    #: The per-listing slice list from M13's stub, kept for the day a full
+    #: replay stops fitting. Prose on purpose: it is a design note, not code.
+    SCOPED_QUERY_DESIGN = """
+    To reproduce FeatureState's answers for ONE listing without a full replay,
+    a scoped read must cover:
+
+    - the target listing's own `listing_posted`, for every intrinsic feature;
+    - every event of every prior listing by the same donor, for the
+      `donor_prior_*` track record and `donor_median_claim_latency`;
+    - every `listing_posted` by any donor within MARKET_RADIUS_KM whose pickup
+      window has not closed, for `open_listings_within_15km`;
+    - every `listing_claimed` in the trailing CLAIM_WINDOW_HOURS near the
+      donor, for `claims_within_15km_prior_7d`;
+    - every `listing_claimed` whose recipient is within the radius, for the
+      WHOLE LIFE OF THE LOG — `recipients_within_*` is cumulative, and a
+      recipient enters the index through the claim it made, whoever's listing
+      that was.
+
+    That last slice is unbounded in time, so it wants a maintained per-donor
+    recipient count rather than a query — a schema decision, and the strongest
+    argument for the `org_registered` event (docs/ML Subsystem.md §7).
+    """
+
+    def __init__(self, config: SupabaseConfig | None = None) -> None:
+        self._rest = SupabaseRest(config, read_only=True)
+
+    @property
+    def project_url(self) -> str:
+        return self._rest.project_url
+
     def replay(self, until: datetime | None) -> Iterator[LogEvent]:
-        raise NotImplementedError(
-            "the production event source is M14; see this class's docstring for the "
-            "query scope it has to cover"
+        """Every production event with `occurred_at <= until`, chronologically.
+
+        Ordered by `(occurred_at, id)` — the same total order
+        `ml.features.log.from_postgres` uses against the corpus, and the same
+        one the identity primary key was chosen to provide. Two events sharing
+        a microsecond must fold in the same order here as they do in the batch
+        pipeline or the two would disagree about a tie-break.
+
+        Filtering is done server-side (`occurred_at=lte.…`) rather than by
+        breaking out of the loop: over HTTP, pages already fetched are already
+        paid for.
+        """
+        filters: dict[str, str] = {}
+        if until is not None:
+            filters["occurred_at"] = f"lte.{until.isoformat()}"
+
+        rows = self._rest.select(
+            "events",
+            columns="occurred_at,event_type,listing_id,claim_id,actor_org_id,payload",
+            order="occurred_at.asc,id.asc",
+            filters=filters,
         )
+        for row in rows:
+            yield LogEvent(
+                occurred_at=parse_instant(row["occurred_at"]),
+                event_type=row["event_type"],
+                listing_id="" if row["listing_id"] is None else str(row["listing_id"]),
+                claim_id=None if row["claim_id"] is None else str(row["claim_id"]),
+                actor_org_id=(None if row["actor_org_id"] is None else str(row["actor_org_id"])),
+                payload=row["payload"],
+            )
 
     def latest_event_at(self) -> datetime | None:
-        raise NotImplementedError("the production event source is M14")
+        row = self._rest.first("events", columns="occurred_at", order="occurred_at.desc")
+        return None if row is None else parse_instant(row["occurred_at"])
+
+
+def production_source(name: str) -> EventSource:
+    """Resolve a `--source` CLI value to a source. Used by the batch job."""
+    if name == "corpus":
+        return CorpusEventSource()
+    if name == "production":
+        return ProductionEventSource()
+    raise ValueError(f"unknown event source {name!r}; expected 'corpus' or 'production'")

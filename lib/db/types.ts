@@ -49,6 +49,16 @@ export interface LatLng {
 export type ListingStatus = "open" | "claimed" | "completed" | "cancelled";
 
 /**
+ * Waste-risk tier from the ML subsystem (M14), written by `python -m ml.batch`.
+ *
+ * Mirrors the check constraint on `public.listing_risk.risk_tier`. The tier is
+ * a bucketing of a calibrated probability at two thresholds placed on the
+ * `val_op` split — see `ml/model/model_card.json`, not a raw score, because a
+ * probability on a listing card invites a precision the model does not have.
+ */
+export type RiskTier = "low" | "medium" | "high";
+
+/**
  * Result codes returned by the M6 write functions. They return a code instead
  * of raising so that user-facing copy lives in TypeScript and every branch is
  * easy to test. Keep in step with the migration.

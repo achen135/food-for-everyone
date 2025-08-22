@@ -282,6 +282,75 @@ async function testBackfill(): Promise<void> {
   eq("a second run is a no-op", second, 0);
 }
 
+/**
+ * M14 — `backfill_events_incremental()`.
+ *
+ * Two properties, and the second is a regression test for a real bug.
+ *
+ * 1. **Incremental, not all-or-nothing.** M10's `backfill_events()` refuses to
+ *    run once any backfilled row exists, so after `--reset-activity` the new
+ *    listings got no events at all and the ML batch scorer saw an empty log.
+ *
+ * 2. **Causal ordering within a shared instant.** M10 ordered the insert by
+ *    `occurred_at, event_type`, which is alphabetical: `claim_cancelled` sorts
+ *    before `listing_claimed`. A claim created and released at the same
+ *    timestamp — which the seed produces — therefore landed in the log as
+ *    released-then-claimed, and a replay left the listing `claimed` when it was
+ *    really back `open`. Measured cost on a freshly seeded database: one open
+ *    listing out of thirteen, silently missing from the batch scorer's
+ *    population.
+ *
+ *    `(occurred_at, id)` is the cursor the ml side replays on, so insertion
+ *    order *is* causal order. This asserts it directly: wherever a claim's
+ *    `listing_claimed` and `claim_cancelled` share an instant, the claim must
+ *    have the lower id.
+ */
+async function testIncrementalBackfill(): Promise<void> {
+  console.log("\nincremental backfill fills gaps and orders causally");
+
+  const { data: noop, error } = await admin.rpc("backfill_events_incremental");
+  if (error) throw new Error(`backfill_events_incremental: ${error.message}`);
+  eq("a run with nothing missing is a no-op", noop, 0);
+
+  const { data: rows, error: readError } = await admin
+    .from("events")
+    .select("id, occurred_at, event_type, claim_id")
+    .in("event_type", ["listing_claimed", "claim_cancelled"])
+    .not("claim_id", "is", null);
+  if (readError) throw new Error(`events.select: ${readError.message}`);
+
+  const byClaim = new Map<
+    string,
+    {
+      claimed?: { id: number; at: string };
+      cancelled?: { id: number; at: string };
+    }
+  >();
+  for (const row of rows ?? []) {
+    const claimId = row.claim_id as string;
+    const entry = byClaim.get(claimId) ?? {};
+    const slot = { id: row.id as number, at: row.occurred_at as string };
+    if (row.event_type === "listing_claimed") entry.claimed = slot;
+    else entry.cancelled = slot;
+    byClaim.set(claimId, entry);
+  }
+
+  let collisions = 0;
+  let misordered = 0;
+  for (const { claimed, cancelled } of byClaim.values()) {
+    if (!claimed || !cancelled) continue;
+    if (claimed.at !== cancelled.at) continue;
+    collisions++;
+    if (claimed.id > cancelled.id) misordered++;
+  }
+
+  // Reported rather than required: a seeded database may contain zero
+  // same-instant claim/release pairs, and a test that silently asserts nothing
+  // is worse than one that says so.
+  console.log(`  (${collisions} claim/release pair(s) share an instant)`);
+  eq("a claim is never released before it is made", misordered, 0);
+}
+
 async function testTransitions(
   donorOrg: string,
   recipientOrg: string,
@@ -498,10 +567,11 @@ async function testSurvivesOrgDeletion(donorOrg: string): Promise<void> {
 // ---------------------------------------------------------------- main
 
 async function main(): Promise<void> {
-  console.log(`M10 events tests — ${url}`);
+  console.log(`M10/M14 events tests — ${url}`);
 
   await deleteTestUsers();
   await testBackfill();
+  await testIncrementalBackfill();
 
   const donorOrg = await makeOrg(
     DONOR_EMAIL,

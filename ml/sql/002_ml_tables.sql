@@ -13,8 +13,16 @@
 -- adding a 003, and `make db-reset` picks the change up.
 --
 -- The one thing that must not be edited casually is 001_events.sql, which
--- mirrors a real migration and carries a sync obligation. This file has no
--- counterpart on the web side and is free to change.
+-- mirrors a real migration and carries a sync obligation.
+--
+-- **As of M14 this file has a partial counterpart too.** `listing_risk` below
+-- now also exists in production Supabase, created by
+-- `supabase/migrations/20260910203000_listing_risk.sql`, because the web app
+-- reads it. Its five columns must stay identical in both places — the batch job
+-- writes both through one `RiskRow` (`ml/src/ml/batch/writeback.py`), so a
+-- divergence shows up as a write of a column the other side does not have.
+-- `features_waste`, `predictions` and `metric_history` have no web counterpart
+-- and remain free to change.
 
 ------------------------------------------------------------------------------
 -- features_waste — one row per open-listing observation.
@@ -117,6 +125,11 @@ create index if not exists predictions_served_at_idx
 -- with a silent fallback. `listing_id` is the primary key rather than an
 -- append log: the app wants "what is this listing's risk right now", and the
 -- history of how that changed lives in `predictions`.
+--
+-- **Mirrored in production** by migration 20260910203000 — see the sync note in
+-- this file's header. The production copy additionally carries RLS (select
+-- scoped to the caller's own listings, no write policy at all); this one does
+-- not, because the corpus database has no users to authorise.
 ------------------------------------------------------------------------------
 create table if not exists public.listing_risk (
   listing_id    uuid        primary key,

@@ -124,6 +124,28 @@ hash: install ## Print the stream hash — the determinism check, by hand
 	@$(BIN)/python -m ml.simulate --seed $(SEED) --months $(MONTHS) \
 	  --out jsonl --path - 2>/dev/null | shasum -a 256
 
+# -- batch scoring (M14) ------------------------------------------------------
+
+.PHONY: batch
+batch: install db-up ## Score every open listing into the corpus listing_risk
+	@ML_SERVE_AS_OF=$(SERVE_AS_OF) $(BIN)/python -m ml.batch --source corpus
+
+.PHONY: batch-dry
+batch-dry: install db-up ## Same, but write nothing
+	@ML_SERVE_AS_OF=$(SERVE_AS_OF) $(BIN)/python -m ml.batch --source corpus --dry-run
+
+# Reads FFE's live event log and writes production `listing_risk`. Needs
+# FFE_SUPABASE_URL + FFE_SUPABASE_SERVICE_ROLE_KEY (or the NEXT_PUBLIC_/
+# SUPABASE_ names from .env.local). `as_of` is `now` here, deliberately: unlike
+# the corpus, the production log runs up to the present.
+.PHONY: batch-prod
+batch-prod: install ## Score FFE production listings into production listing_risk
+	@$(BIN)/python -m ml.batch --source production
+
+.PHONY: batch-prod-dry
+batch-prod-dry: install ## Same, but write nothing — use this first
+	@$(BIN)/python -m ml.batch --source production --dry-run
+
 # -- checks -----------------------------------------------------------------
 
 .PHONY: lint
