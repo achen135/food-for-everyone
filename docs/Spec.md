@@ -297,15 +297,15 @@ Keep this current between planning sessions. Settled question → move reasoning
   per milestone, opens a PR, squash-merges, tags `v0.x-mN`.
 - [ ] Add Lighthouse CI or `axe-core` to the CI workflow at M4 — commits the a11y evidence the
   same way M7 commits the k6 report.
-- [ ] **M2 — `signUp` leaks raw Supabase error text.** `signIn` deliberately genericises to
-  "Incorrect email or password"; `signUp` returns `error.message` straight through, which can
-  surface "User already registered" → account enumeration. Match signIn's treatment.
-- [ ] **`lib/supabase/middleware.ts` fails open.** If `NEXT_PUBLIC_SUPABASE_*` is missing the
-  proxy no-ops and stops gating `/app/*`; the warning is suppressed in production. Mitigated
-  today (`lib/env.ts` throws during render, so it 500s rather than leaking), but the production
-  branch should fail loudly instead of passing quietly.
 - [ ] **Link the Supabase CLI before M2 schema work.** `_init.sql` was applied by hand, so the
   local migration file and the live DB can drift silently. `supabase link --project-ref
   pdgbtkplzfocxyuflpxm`, then `migration repair --status applied 20260828223018` so `db push`
   owns M2's changes.
+- [ ] **Throttle outbound Nominatim calls.** Search-triggered + `unstable_cache` satisfies the
+  usage policy for normal use, but a signed-in user can drive uncached queries as fast as they
+  can click, and the ban lands on our egress IP, not on them. M7's token-bucket limiter is the
+  real fix; consider a cheap per-user guard before the app is public.
+- [ ] **Always `supabase db push` before closing a milestone.** M2's migration sat unapplied
+  because the app still worked against the old schema (`select *` just returned the dropped
+  column). Add "migration list shows the version in both columns" to the milestone checklist.
 - [ ] Résumé consistency pass at the §7.1 deploy checkpoint, and again if M6–M8 land (§9).

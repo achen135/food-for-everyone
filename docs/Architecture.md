@@ -27,7 +27,7 @@ it will take at milestone x, not built yet).
 
 ---
 
-## 1. Folder layout **[current: M1]**
+## 1. Folder layout **[current: M2]**
 
 ```
 app/                 Next.js App Router. Each folder = a route segment.
@@ -37,23 +37,26 @@ app/                 Next.js App Router. Each folder = a route segment.
   (auth)/            Route group (no URL segment) — unauthenticated pages.
     layout.tsx       Centered card; bounces signed-in users to /app.
     actions.ts       "use server" — signIn / signUp / signOut.
-    sign-in/         /sign-in
-    sign-up/         /sign-up
-    verify-email/    /verify-email — "check your inbox" after signup.
+    sign-in/ sign-up/ verify-email/
   auth/              Literal /auth/* — OAuth + email return endpoints.
     callback/route.ts    exchangeCodeForSession (OAuth / PKCE).
     confirm/route.ts     verifyOtp (email token_hash).
     auth-code-error/     shown when a link is bad/expired.
   app/               Literal /app/* — authenticated area (gated by proxy.ts).
-    layout.tsx       Server session re-check + ensure profile + signed-in shell.
-    page.tsx         Placeholder dashboard.
+    layout.tsx       Server session re-check + ensure profile + nav shell.
+    page.tsx         Dashboard — org summary card, or a "set up" CTA.
+    organization/
+      page.tsx       Create/edit form (loads the caller's org).
+      actions.ts     "use server" — searchAddressAction, saveOrganizationAction.
 components/
-  ui/                shadcn components, vendored (button, card, input, label,
-                     form, sonner). We own this code.
+  ui/                shadcn, vendored: button, card, input, label, form, sonner,
+                     textarea, radio-group, dialog, badge.
   auth/              sign-in-form, sign-up-form, google-button (client).
+  organization/      organization-form, address-search-dialog (client).
 lib/
   env.ts             Lazy env accessors (never throw at import time).
   utils.ts           cn() — className merge helper.
+  geocode.ts         server-only. Nominatim /search, unstable_cache-wrapped.
   auth/redirect.ts   safeRedirectPath() — same-origin redirect guard.
   supabase/          client.ts (browser), server.ts (per-request), middleware.ts
                      (updateSession helper used by proxy.ts).
@@ -61,13 +64,15 @@ lib/
     index.ts         Public barrel — callers import from here.
     instrument.ts    tracked() read counter (M7 seam).
     profiles.ts      getMyProfile, getOrCreateProfile.
+    organizations.ts getMyOrganization, upsertMyOrganization.
     types.ts         Hand-written row types (generated types come later).
-  validation/auth.ts zod schemas shared client + server.
+  validation/        auth.ts, organization.ts — zod, shared client + server.
 proxy.ts             Session refresh + gate /app/* (Next 16's renamed
                      "middleware" convention).
 supabase/
-  config.toml        Supabase CLI config.
-  migrations/        SQL migrations (schema + RLS). 20260828223018_init.sql = M1.
+  config.toml        Supabase CLI config (linked to project pdgbtkplzfocxyuflpxm).
+  migrations/        20260828223018_init.sql (M1),
+                     20260829041111_organization_profile.sql (M2).
 docs/                This planning set (mirrored from the Obsidian vault).
 .github/workflows/   CI.
 ```
@@ -77,16 +82,11 @@ docs/                This planning set (mirrored from the Obsidian vault).
 ```
 app/
   (marketing)/       route group — public landing [M4]
-  app/
-    organization/    create/edit the org + address [M2]
-    map/             the map page [M3]
+  app/map/           the map page [M3]
   api/
     health/route.ts  cheap endpoint for the keep-alive cron [deploy checkpoint]
     orgs/route.ts    GET counterparties near a point (GeoJSON) [M3]
     listings/…       donation listings + claims [M6]
-lib/
-  db/organizations.ts    org reads/writes [M2]
-  geocode.ts             search-triggered Nominatim client + cache [M2]
 supabase/
   migrations/…            widen organizations RLS for the map [M3]
   seed.ts                 ~25–30 demo orgs across one metro [M3], + analytics [M8]
@@ -94,7 +94,7 @@ supabase/
 
 ## 2. Request lifecycle
 
-**[current: M1]**
+**[current: M2]**
 
 - **Every request** hits `proxy.ts` first (Next runs it on the matched paths).
   It calls `updateSession()`: builds a request-bound Supabase server client,
@@ -103,24 +103,33 @@ supabase/
   `/app/*` requests to `/sign-in`. If Supabase env is unset it logs once and
   passes through.
 - **Landing "/"** is a static RSC — no JS, no session read.
-- **Auth pages** (`/sign-in`, `/sign-up`, …) are dynamic RSCs under
-  `app/(auth)/layout.tsx`, which reads the session and redirects to `/app` if
-  you're already in. The forms are Client Components (`react-hook-form` + zod).
-- **Auth mutation:** form → `onSubmit` calls a Server Action in
-  `app/(auth)/actions.ts` → the action re-parses the shared zod schema →
-  `supabase.auth.*` sets/clears the cookie → `redirect()`.
-- **OAuth / email return:** Google or the signup email sends the browser to
-  `app/auth/callback` or `app/auth/confirm` (Route Handlers) which turn the
-  `code` / `token_hash` into a session cookie, then redirect to `next`.
+- **Auth pages** are dynamic RSCs under `app/(auth)/layout.tsx`, which reads the
+  session and redirects to `/app` if you're already in. Forms are Client
+  Components (`react-hook-form` + zod).
+- **Auth mutation:** form → Server Action in `app/(auth)/actions.ts` → re-parse
+  shared zod schema → `supabase.auth.*` sets/clears the cookie → `redirect()`.
+- **OAuth / email return:** `app/auth/callback` / `app/auth/confirm` Route
+  Handlers turn the `code` / `token_hash` into a session cookie, then redirect.
 - **Authenticated page:** `app/app/layout.tsx` re-checks the session, calls
-  `getOrCreateProfile()`, renders the shell.
+  `getOrCreateProfile()`, renders the nav shell.
+- **Address search (M2):** the "Search address" button in the org form calls
+  `searchAddressAction` (Server Action) → `geocodeAddress()` → Nominatim
+  `/search`, wrapped in `unstable_cache` so a repeat query never re-hits it.
+  Never fires on keystroke (Nominatim policy — see Design Decisions). Results
+  come back to the client; picking one sets `address` + `latitude`/`longitude`
+  in form state.
+- **Organization write (M2):** form → `saveOrganizationAction` → re-parse the
+  shared `organizationSchema` → `upsertMyOrganization()` (through `lib/db`,
+  `onConflict: owner_id`) → RLS `organizations_*_own` is the second check →
+  `revalidatePath` → the action returns `{ ok: true }` and the client toasts +
+  `router.push("/app")`. (Contrast the auth actions, which `redirect()`
+  server-side — here we return data so the client can toast first.)
 
-**[planned]** Data-read shape once the map lands:
-browser → `GET /api/orgs?...` (Route Handler) → session check → one PostGIS
-query through `lib/db` → GeoJSON → client map renders it. The browser never
-holds a DB credential.
+**[planned]** Map data read [M3]: browser → `GET /api/orgs?...` (Route Handler)
+→ session check → one PostGIS query through `lib/db` → GeoJSON → client map.
+The browser never holds a DB credential.
 
-## 3. Auth & authorization **[current: M1]**
+## 3. Auth & authorization **[current: M2]**
 
 - **Authentication** (who you are): Supabase Auth — email/password **and** Google
   OAuth. The session is a cookie, read on the server via `@supabase/ssr`
@@ -131,8 +140,14 @@ holds a DB credential.
   2. Server Action / Route Handler / `app/app/layout.tsx` — server re-check
     before rendering or mutating (fail fast, good errors).
   3. **Row Level Security** on every table — `auth.uid() = <owner column>`.
-    Even a wrong query returns zero rows. M1 policies: `profiles` own-row only;
-    `organizations` own-row only (M3 widens SELECT for the map).
+    Even a wrong query returns zero rows. Policies: `profiles` own-row only;
+    `organizations` own-row only for `select/insert/update/delete` (M3 widens
+    SELECT for the map). `organizations.owner_id` also defaults to `auth.uid()`
+    (M2) so a write that omits it can't create a mis-owned row.
+- **M2 schema note:** `profiles.organization_id` was **dropped** (M2 migration).
+  It duplicated `organizations.owner_id` and was writable to any UUID under
+  `profiles_update_own`. One org per account is enforced by the unique index on
+  `organizations.owner_id` — see Design Decisions, 2026-08-29.
 - **Data minimisation:** whatever reads organizations for the map (M3) will
   select org-level columns only (name, type, address, contact, description) —
   never `profiles.full_name` or the registrant's login email.
@@ -140,28 +155,39 @@ holds a DB credential.
   (`handle_new_user`) creates the `profiles` row; `getOrCreateProfile()` is the
   app-side backstop (handles "trigger not installed yet" and the insert race).
 
-## 4. Data layer **[current: M1]**
+## 4. Data layer **[current: M2]**
 
 `lib/db/` is the only place that runs queries. Callers import the barrel
 (`@/lib/db`), never `@/lib/supabase/server` directly. Every operation is wrapped
 in `tracked(label, () => query)` (`lib/db/instrument.ts`), which today just
 increments a process-local read counter and is the single seam where M7 hangs
-timing and a read-through cache — no call site changes. M1 functions:
-`getMyProfile()`, `getOrCreateProfile(user)`. Row types are hand-written in
-`lib/db/types.ts` for now; `supabase gen types` output replaces them once the
-schema settles.
+timing and a read-through cache — no call site changes.
 
-## 5. The map **[planned: M3]**
+Functions: `getMyProfile()`, `getOrCreateProfile(user)` (profiles);
+`getMyOrganization()`, `upsertMyOrganization(userId, fields)` (organizations).
+The upsert keys on `owner_id` (one org per account). `location` is written as a
+WKT string `POINT(lng lat)` which PostgREST casts to `geography(Point,4326)`;
+when the form didn't re-search the address, `latitude`/`longitude` come through
+as `null` and `location` is left out of the write so the stored point survives.
 
-- `react-map-gl/maplibre` renders MapLibre GL; tiles from OpenFreeMap (no key).
-- The map page asks the browser for geolocation, then calls `/api/orgs` with the centre point
-  and a radius.
-- The handler runs `ST_DWithin` (PostGIS) scoped to the caller's counterparty type and
-  returns a GeoJSON `FeatureCollection`.
-- `react-map-gl` loads that as a clustered source; clicking a pin opens a popup with contact
-  details.
-- Addresses are turned into coordinates by **search-triggered** Nominatim geocoding (a
-  "search address" button, debounced, results cached — not per-keystroke; see Design Decisions).
+Row types are hand-written in `lib/db/types.ts`; `supabase gen types` output
+replaces them once the schema settles.
+
+## 5. Geocoding **[current: M2]** / The map **[planned: M3]**
+
+- **Geocoding (M2):** `lib/geocode.ts` (`server-only`). `geocodeAddress(query)`
+  normalizes the query, short-circuits anything under 3 chars, then calls
+  `fetchGeocodeResults` wrapped in `unstable_cache` (30-day TTL, tag `geocode`).
+  `fetchGeocodeResults` hits Nominatim `/search?format=jsonv2` with a real
+  `User-Agent` and maps `{display_name,lat,lon}` → `{label,latitude,longitude}`.
+  Only ever called from `searchAddressAction` — never per-keystroke (Nominatim
+  policy, Design Decisions). Photon is the documented fallback. The
+  Postgres-backed read-through cache is an M7 deliverable, not this.
+- **The map (M3):** `react-map-gl/maplibre` + OpenFreeMap tiles (no key). The
+  map page gets browser geolocation, calls `/api/orgs` with a centre + radius;
+  the handler runs `ST_DWithin` scoped to the caller's counterparty type and
+  returns a GeoJSON `FeatureCollection`; `react-map-gl` renders it clustered,
+  pin click → contact popup.
 
 ## 6. Config files **[current: M1]**
 
@@ -172,15 +198,16 @@ schema settles.
 | `eslint.config.mjs` | ESLint 9 flat config (`eslint-config-next` + Prettier compat). |
 | `.prettierrc.json` / `.prettierignore` | Prettier + Tailwind class sorting; `docs/` and `CLAUDE.md` excluded (Obsidian-authored). |
 | `vitest.config.mts` | Vitest + jsdom + RTL. `.mts` so it loads as ESM; `resolve.tsconfigPaths: true` for `@/*`. |
-| `vitest.setup.ts` | jest-dom matchers. |
+| `vitest.setup.ts` | jest-dom matchers + jsdom polyfills Radix needs (`ResizeObserver`, `matchMedia`, pointer-capture). |
 | `components.json` | shadcn config (style `radix-nova`, lucide icons, aliases). |
 | `postcss.config.mjs` | Tailwind v4 PostCSS plugin. |
 | `.nvmrc` | Node version for local + CI. |
 | `.env.example` | Env var names — `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (unused yet), `NEXT_PUBLIC_SITE_URL`. Copy to `.env.local`. |
+| `.prettierignore` | Excludes `docs/`, `CLAUDE.md` (Obsidian-authored), and `supabase/.temp/` (CLI local state). |
 | `proxy.ts` | Next 16 "middleware" convention (renamed). Session refresh + `/app/*` gate. |
-| `supabase/config.toml` | Supabase CLI config (project id, local ports). |
+| `supabase/config.toml` | Supabase CLI config; linked to project `pdgbtkplzfocxyuflpxm`. `supabase db push` applies `migrations/*`. |
 
-## 7. Build & CI **[current: M1]**
+## 7. Build & CI **[current: M2]**
 
 `.github/workflows/ci.yml` runs on push to `main` and every PR:
 `npm ci` → Prettier check → ESLint → `next typegen && tsc --noEmit` → Vitest → `next build`.
@@ -197,6 +224,12 @@ separate git agent.
 
 ## Change log
 
+- **2026-08-29** — M2. Organization create/edit (`/app/organization`),
+  search-triggered Nominatim geocoding (`lib/geocode.ts`), `lib/db/organizations.ts`,
+  `lib/validation/organization.ts`, dashboard org summary. Migration
+  `20260829041111` drops `profiles.organization_id`, defaults `owner_id` to
+  `auth.uid()`, adds length CHECKs. `signUp` error genericised. Sections 1–7
+  updated to `[current: M2]`.
 - **2026-08-28** — M1. Auth (email/password + Google), `profiles` + `organizations`
   schema with RLS, `proxy.ts` session gate, `lib/supabase/*`, `lib/db/*` data
   layer, `lib/validation/auth.ts`. Sections 1–4, 6, 7 updated to `[current: M1]`.

@@ -6,4 +6,9 @@
 
 export { getReadCount, resetReadCount, tracked } from "@/lib/db/instrument";
 export { getMyProfile, getOrCreateProfile } from "@/lib/db/profiles";
+export {
+  getMyOrganization,
+  upsertMyOrganization,
+  type OrganizationWrite,
+} from "@/lib/db/organizations";
 export type { Organization, OrganizationType, Profile } from "@/lib/db/types";

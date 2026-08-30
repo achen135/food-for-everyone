@@ -11,3 +11,6 @@ package-lock.json
 # vault-authored master copies (edited in Obsidian, not here)
 CLAUDE.md
 docs/
+
+# supabase CLI local state (gitignored, but present after `supabase link`)
+supabase/.temp/

@@ -13,6 +13,150 @@
 
 ---
 
+## 2026-08-30 — M2 review + fixes
+
+Review pass over the M2 working tree before starting M3. Code quality was high — 53 tests,
+pipeline green, migration reasoning documented, `signUp` correctly genericised. The two
+blockers were process, not code.
+
+- **Blocker — M2's migration was never applied.** `migration list` showed `20260829041111`
+  local-only, remote empty. The live DB still had `profiles.organization_id`, no `owner_id`
+  default, no length constraints. Nothing failed, because `select *` just returned the extra
+  column and TypeScript ignored it — the drift was completely silent. Exactly the failure mode
+  the M1 review predicted. Added a checklist item: `migration list` must show the version in
+  *both* columns before a milestone closes.
+- **Blocker — the whole milestone was uncommitted.** No commit, branch push, PR, or tag.
+- **Fixed — proxy no longer fails open.** `lib/supabase/middleware.ts` returned early in every
+  environment when Supabase env was missing, silently un-gating `/app/*` on a misconfigured
+  production deploy. Now it fails *closed*: production logs an error and redirects protected
+  routes to sign-in, while public routes still render. `requiresAuth()` extracted so the rule
+  lives in one place. (Carried from the M1 review; skipped during M2.)
+- **Fixed — address/coordinate drift.** The form makes address display-only (set only by the
+  search dialog), but `saveOrganizationAction` takes `input: unknown`, so a crafted edit could
+  change the address text while keeping the old point — an M3 map pin sitting somewhere other
+  than the address beside it. New pure helper `needsFreshGeocode()` rejects it server-side;
+  5 tests. The lesson worth keeping: a UI-enforced invariant is not enforced.
+- **Checked, no action:** the `website` field cannot carry a `javascript:`/`data:` URL into an
+  `href` — `normalizeWebsite` prepends `https://` to anything without an http(s) scheme, which
+  defuses every payload tried. `rel="noreferrer"` already implies `noopener`.
+- **Notes — deferred, in Spec §10:** no throttle on outbound Nominatim calls (a ban would land
+  on our egress IP, not the abuser); M7's limiter is the real fix.
+- **Notes — docs round-trip.** `Architecture.md` and `Concepts.md` were again newer in the repo
+  than the vault. Mirrored back. This direction (repo → vault) needs checking every milestone.
+- **Next:** commit + PR + `db push` + tag `v0.2-m2`, then M3 (map).
+
+## 2026-08-29 — M2: organization profile + geocoding
+
+Branch `m2/organization-profile`. Commits handled by the git agent (one PR + tag `v0.2-m2`).
+Started from green `main` (M1 merged, `v0.1-m1`, 28 tests). Supabase CLI already linked to
+`pdgbtkplzfocxyuflpxm`; `migration list` showed M1 registered on the remote.
+
+- **Did — migration `20260829041111_organization_profile.sql`:**
+  - `drop column profiles.organization_id` — redundant with `organizations.owner_id` and
+    user-writable to any UUID under `profiles_update_own` (Design Decisions, 2026-08-29).
+  - `organizations.owner_id` now `default auth.uid()`.
+  - Length `CHECK`s on description/email/phone/website/address (zod is the real layer; these
+    are a floor). No RLS change — M1's owner-scoped `organizations_*` policies are exactly M2.
+- **Did — geocoding (`lib/geocode.ts`, `server-only`):** `geocodeAddress(query)` normalises,
+  drops <3 chars, calls `fetchGeocodeResults` wrapped in `unstable_cache` (30-day TTL, tag
+  `geocode`). `fetchGeocodeResults` → Nominatim `/search?format=jsonv2` with a real
+  `User-Agent`, maps to `{label, latitude, longitude}`, 5s timeout, throws on non-200.
+- **Did — data layer (`lib/db/organizations.ts`):** `getMyOrganization()`,
+  `upsertMyOrganization(userId, fields)` (`onConflict: owner_id`). Writes `location` as
+  `POINT(lng lat)` WKT; omits it when lat/lng are null so an edit that didn't re-search keeps
+  the stored point. Both through `tracked()`. Barrel + `Profile` type updated (dropped
+  `organization_id`).
+- **Did — validation (`lib/validation/organization.ts`):** shared `organizationSchema`
+  (name, type enum, description, email/phone/website with per-field refines, address,
+  nullable lat/lng) + a cross-field `.refine()` requiring email OR phone; `geocodeQuerySchema`.
+- **Did — server actions (`app/app/organization/actions.ts`):** `searchAddressAction`
+  (session-gated, `geocodeQuerySchema`, calls `geocodeAddress`), `saveOrganizationAction`
+  (session-gated, `organizationSchema`, "must geocode before first save" guard, upsert,
+  `revalidatePath`, returns `{ ok }` — no server redirect).
+- **Did — UI:** `/app/organization` page + `OrganizationForm` (RHF + zodResolver, radio-group
+  type picker, textarea, contact fieldset) + `AddressSearchDialog` (Radix Dialog: type →
+  Search → pick a result → sets address + lat/lng). Dashboard (`/app`) now shows an org
+  summary card (name, type badge, address, contacts) or a setup CTA. Header got Dashboard /
+  Organization nav. shadcn added: `textarea`, `radio-group`, `dialog`, `badge`.
+- **Did — Spec §10 fix:** `signUp` no longer returns raw `error.message` ("User already
+  registered" was an enumeration oracle) — generic "couldn't create that account, sign in
+  instead".
+- **Did — housekeeping:** `.prettierignore` += `supabase/.temp/` (appears after `supabase
+  link`, was failing local `format:check`). `vitest.setup.ts` += jsdom polyfills
+  (`ResizeObserver`, `matchMedia`, pointer-capture) so Radix renders under test.
+- **Problem / fix:**
+  - `react-hooks/incompatible-library` lint warning on `form.watch("address")` — React
+    Compiler can't memoize `watch()`'s return. Switched to `useWatch({ control, name })`.
+  - Radix org-form test threw `ResizeObserver is not defined` — jsdom gap; added polyfills.
+- **Tests:** +25 (53 total). `lib/validation/organization.test.ts` (schema + refines),
+  `lib/geocode.test.ts` (mocked `fetch`: URL/params, UA header, mapping, error paths,
+  short-query short-circuit), `components/organization/organization-form.test.tsx` (RTL:
+  render, empty-submit validation, edit → action payload + navigation, server field errors).
+  `format` / `lint` / `typecheck` / `test` / `build` green with no `.env.local`.
+
+### RLS review (M2)
+
+M2 adds **no new policies**; it relies on M1's `organizations_{select,insert,update,delete}_own`
+(`to authenticated`, `auth.uid() = owner_id`) and removes a column.
+
+- **Create:** `saveOrganizationAction` sets `owner_id` from the session; `owner_id` also
+  defaults to `auth.uid()`; the `insert` policy's `with check (auth.uid() = owner_id)` rejects
+  anything else. Unique index on `owner_id` → one org per account.
+- **Update:** `using` + `with check` both pin `owner_id` to the caller, so a user can neither
+  edit someone else's org nor hand their own to another user.
+- **Read:** own-row only — the dashboard and the edit form only ever see the caller's org.
+  M3's migration widens SELECT for the map and gets its own review.
+- **Dropped attack surface:** `profiles.organization_id` is gone, so there is no longer a
+  user-writable pointer that a future join could trust.
+- **Geocoding:** no table, no RLS surface. Outbound only, to Nominatim, server-side.
+
+### How this code works (walkthrough for Alex)
+
+**One org per account, and the form is the same for create and edit.**
+`/app/organization/page.tsx` (a Server Component) calls `getMyOrganization()` — a `select …
+where owner_id = auth.uid()`. It passes the row (or `null`) to `<OrganizationForm initial>`.
+The form's default values come from `initial`; when `initial` is `null` every field starts
+empty and the type radio starts unselected.
+
+**Picking an address never involves typing coordinates.** The "Search address" button opens a
+Radix dialog. You type, hit Search, and that calls `searchAddressAction` on the server. The
+action validates the query, then `geocodeAddress()` asks Nominatim — but first it checks
+`unstable_cache`, so the same query within 30 days returns instantly and Nominatim never sees
+it twice. The results come back as `{label, latitude, longitude}`. Clicking one calls
+`form.setValue` for `address`, `latitude`, `longitude` together and closes the dialog. The
+lat/lng live in form state as real numbers; the address box is display-only.
+
+**Saving.** `onSubmit` hands the whole form object to `saveOrganizationAction`. The action
+re-parses it with the *same* `organizationSchema` the client used (never trust the client),
+checks you're signed in, and — if this is a first save — refuses unless lat/lng are present.
+Then `upsertMyOrganization()` runs one `INSERT … ON CONFLICT (owner_id) DO UPDATE`. The point
+is written as the string `POINT(lng lat)`, which PostgREST casts into the `geography` column.
+If you edited without re-searching the address, lat/lng are `null`, the `location` key is left
+out of the write, and Postgres keeps the point that was already there. RLS re-checks ownership
+on the way in. The action returns `{ ok: true }`; the client shows a toast and calls
+`router.push("/app")`, where the dashboard now renders the summary card.
+
+**Why `signUp` changed.** With email confirmation *off*, Supabase's `signUp` returns the error
+"User already registered" for a known address — which lets someone probe which emails have
+accounts. We now return one generic message for every failure. (With confirmation *on*,
+Supabase already hides this by returning a decoy success, which our code was handling fine.)
+
+### Needs Alex
+
+1. **Apply the migration.** `npx supabase db push` (the CLI is linked; `--dry-run` already
+   passed and lists `20260829041111_organization_profile.sql`). Or paste that file into the
+   SQL editor. `organizations` is empty so the CHECKs and the column drop apply instantly.
+2. **Verify end-to-end** on `npm run dev` (branch `m2/organization-profile`): dashboard shows
+   the "set up" CTA → `/app/organization` → fill the form → "Search address", pick a result →
+   Create → land on `/app` with the summary card. Then edit (change the description only, don't
+   re-search) → save → confirm the address/point is unchanged. Check the `organizations` row
+   in the Table Editor: `owner_id` = your user, `location` populated, `type` correct.
+3. Optional: confirm a second account can't see the first's org (Table Editor as each user, or
+   the REST check from the M1 session with each user's token).
+- **Next:** M3 — map (`react-map-gl` + OpenFreeMap), browser geolocation, `/api/orgs`
+  `ST_DWithin` endpoint (widen `organizations` SELECT RLS for counterparties), clustered
+  markers + popups, filters, **plus the seed script** (~25–30 orgs across one metro).
+
 ## 2026-08-28 — M1 review + fixes
 
 Review pass over `m1/auth-and-profile` (commit `7d7c3a2`) before opening the PR. Baseline was

@@ -11,7 +11,6 @@ export type OrganizationType = "donor" | "recipient";
 export interface Profile {
   id: string;
   full_name: string | null;
-  organization_id: string | null;
   created_at: string;
 }
 

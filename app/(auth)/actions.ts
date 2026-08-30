@@ -69,7 +69,15 @@ export async function signUp(input: {
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+    // Generic on purpose: `error.message` can be "User already registered",
+    // which turns the signup form into an account-enumeration oracle. (With
+    // email confirmation on, Supabase already returns a decoy success for an
+    // existing address; this covers the confirmation-off case and real errors.)
+    return {
+      ok: false,
+      message:
+        "We couldn't create that account. If you already have one, sign in instead.",
+    };
   }
 
   // A session here means confirmation is disabled on the project; go straight in.
