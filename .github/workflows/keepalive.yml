@@ -1,0 +1,59 @@
+name: Keep-alive
+
+# Supabase free projects pause after ~7 days without activity, which would take
+# the demo link down mid-application-window. This pings /api/health, which makes
+# one small Postgres query, so the project stays awake.
+#
+# Every 3 days rather than the ~5 in Spec §7.1: `*/3` in the day-of-month field
+# restarts at 1 each month, so the real gap between the last run of one month and
+# the first of the next can exceed the nominal interval. 3 keeps the worst case
+# comfortably under 7 even with GitHub's scheduling delays.
+#
+# NOTE: GitHub disables scheduled workflows on repos with no commits for 60 days.
+# During the freeze-for-interviews period, check this is still enabled.
+
+on:
+  schedule:
+    - cron: "13 7 */3 * *"
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        env:
+          # Repository variable (Settings → Secrets and variables → Actions →
+          # Variables). Set to e.g. https://<your-domain>/api/health
+          HEALTH_URL: ${{ vars.HEALTH_URL }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${HEALTH_URL}" ]; then
+            echo "::error::HEALTH_URL repository variable is not set. Add it under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+
+          for attempt in 1 2 3; do
+            echo "Attempt ${attempt}: GET ${HEALTH_URL}"
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "${HEALTH_URL}" || echo "000")
+            echo "  HTTP ${code}"
+            [ -s /tmp/health.json ] && cat /tmp/health.json && echo
+
+            if [ "${code}" = "200" ]; then
+              echo "Project is awake."
+              exit 0
+            fi
+
+            # A paused project can be slow to wake; back off and retry.
+            if [ "${attempt}" -lt 3 ]; then
+              echo "  retrying in 30s..."
+              sleep 30
+            fi
+          done
+
+          echo "::error::Health check did not return 200 after 3 attempts."
+          exit 1
